@@ -1,0 +1,174 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>标签: Redis | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="归途也还可爱">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Lazy的个人博客">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/tags/Redis/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="归途也还可爱">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://mac2git.github.io/hexo-docs/images/webImages/avatar.jpg">
+<meta property="article:author" content="Lazy">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://mac2git.github.io/hexo-docs/images/webImages/avatar.jpg"><script type="application/ld+json"></script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/tags/Redis/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '标签: Redis',
+  isHighlightShrink: false,
+  isToc: false,
+  pageType: 'tag'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="page" id="body-wrap"><header class="not-home-page" id="page-header" style="background-image: url(/hexo-docs/images/webImages/default_top_img.jpeg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="page-site-info"><h1 id="site-title">Redis</h1></div></header><main class="layout" id="content-inner"><div id="tag"><div class="article-sort-title">标签 - Redis</div><div class="article-sort"><div class="article-sort-item year">2025</div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="RedLock算法和底层源码分析和缓存淘汰策略" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略">RedLock算法和底层源码分析和缓存淘汰策略</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="RDB+AOF" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF">RDB+AOF</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="BigKey和缓存双写" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写">BigKey和缓存双写</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="Redis基础" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础">Redis基础</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="epoll函数和IO多路复用深度解析" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析">epoll函数和IO多路复用深度解析</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/" title="HyperLogLog&amp;Geo&amp;Bitmap"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="HyperLogLog&amp;Geo&amp;Bitmap" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/" title="HyperLogLog&amp;Geo&amp;Bitmap">HyperLogLog&amp;Geo&amp;Bitmap</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/pub&amp;sub/" title="pub&amp;sub(发布&amp;订阅)"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="pub&amp;sub(发布&amp;订阅)" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/pub&amp;sub/" title="pub&amp;sub(发布&amp;订阅)">pub&amp;sub(发布&amp;订阅)</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/replica/" title="Replica(主从复制)"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="Replica(主从复制)" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/replica/" title="Replica(主从复制)">Replica(主从复制)</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/redis%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/" title="Redis分布式锁"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="Redis分布式锁" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/redis%E5%88%86%E5%B8%83%E5%BC%8F%E9%94%81/" title="Redis分布式锁">Redis分布式锁</a></div></div><div class="article-sort-item"><a class="article-sort-item-img" href="/hexo-docs/2025/08/13/redis/redis%E7%BB%8F%E5%85%B8%E4%BA%94%E5%A4%A7%E7%B1%BB%E5%9E%8B%E5%8F%8A%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0/" title="Redis经典五大类型源码及底层实现"><img src="https://pic.crazytaxii.com/Redis_Logo.png" alt="Redis经典五大类型源码及底层实现" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'"></a><div class="article-sort-item-info"><div class="article-sort-item-time"><i class="far fa-calendar-alt"></i><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time></div><a class="article-sort-item-title" href="/hexo-docs/2025/08/13/redis/redis%E7%BB%8F%E5%85%B8%E4%BA%94%E5%A4%A7%E7%B1%BB%E5%9E%8B%E5%8F%8A%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0/" title="Redis经典五大类型源码及底层实现">Redis经典五大类型源码及底层实现</a></div></div></div><nav id="pagination"><div class="pagination"><span class="page-number current">1</span><a class="page-number" href="/hexo-docs/tags/Redis/page/2/">2</a><a class="extend next" rel="next" href="/hexo-docs/tags/Redis/page/2/"><i class="fas fa-chevron-right fa-fw"></i></a></div></nav></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix"><img src="https://spring.io/img/projects/spring-cloud.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Netflix"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix">SpringCloud Netflix</a><time datetime="2025-08-23T16:00:00.000Z" title="发表于 2025-08-24 00:00:00">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第二章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章">SpringCloud Alibaba 第二章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第三章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章">SpringCloud Alibaba 第三章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div></div></div><div class="card-widget card-categories"><div class="item-headline">
+            <i class="fas fa-folder-open"></i>
+            <span>分类</span>
+            
+          </div>
+          <ul class="card-category-list" id="aside-cat-list">
+            <li class="card-category-list-item "><a class="card-category-list-link" href="/hexo-docs/categories/ACK/"><span class="card-category-list-name">ACK</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/hexo-docs/categories/Hash/"><span class="card-category-list-name">Hash</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-AI/"><span class="card-category-list-name">后端 AI</span><span class="card-category-list-count">1</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Redis/"><span class="card-category-list-name">后端 Redis</span><span class="card-category-list-count">13</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Spring-Cloud-Alibaba/"><span class="card-category-list-name">后端 Spring Cloud Alibaba</span><span class="card-category-list-count">5</span></a></li><li class="card-category-list-item "><a class="card-category-list-link" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Spring-Cloud-Netflix/"><span class="card-category-list-name">后端 Spring Cloud Netflix</span><span class="card-category-list-count">1</span></a></li>
+          </ul></div><div class="card-widget card-tags"><div class="item-headline"><i class="fas fa-tags"></i><span>标签</span></div><div class="card-tag-cloud"><a href="/hexo-docs/tags/Hash/" style="font-size: 1.1em; color: #999">Hash</a> <a href="/hexo-docs/tags/Spring-Cloud-Alibaba/" style="font-size: 1.1em; color: #999">Spring Cloud Alibaba</a> <a href="/hexo-docs/tags/ACK/" style="font-size: 1.1em; color: #999">ACK</a> <a href="/hexo-docs/tags/Java/" style="font-size: 1.4em; color: #99a5b6">Java</a> <a href="/hexo-docs/tags/Redis/" style="font-size: 1.5em; color: #99a9bf">Redis</a> <a href="/hexo-docs/tags/Spring-Cloud-Netflix/" style="font-size: 1.1em; color: #999">Spring Cloud Netflix</a> <a href="/hexo-docs/tags/Spring-Cloud-alibaba/" style="font-size: 1.3em; color: #99a1ac">Spring Cloud alibaba</a> <a href="/hexo-docs/tags/other/" style="font-size: 1.2em; color: #999da3">other</a> <a href="/hexo-docs/tags/LangChain4j/" style="font-size: 1.1em; color: #999">LangChain4j</a> <a href="/hexo-docs/tags/Spring-Cloud/" style="font-size: 1.4em; color: #99a5b6">Spring Cloud</a></div></div><div class="card-widget card-archives">
+    <div class="item-headline">
+      <i class="fas fa-archive"></i>
+      <span>归档</span>
+      
+    </div>
+  
+    <ul class="card-archive-list">
+      
+        <li class="card-archive-list-item">
+          <a class="card-archive-list-link" href="/hexo-docs/archives/2025/08/">
+            <span class="card-archive-list-date">
+              八月 2025
+            </span>
+            <span class="card-archive-list-count">22</span>
+          </a>
+        </li>
+      
+    </ul>
+  </div><div class="card-widget card-webinfo"><div class="item-headline"><i class="fas fa-chart-line"></i><span>网站信息</span></div><div class="webinfo"><div class="webinfo-item"><div class="item-name">文章数目 :</div><div class="item-count">22</div></div><div class="webinfo-item"><div class="item-name">本站总字数 :</div><div class="item-count">157.6k</div></div><div class="webinfo-item"><div class="item-name">本站访客数 :</div><div class="item-count" id="busuanzi_value_site_uv"><i class="fa-solid fa-spinner fa-spin"></i></div></div><div class="webinfo-item"><div class="item-name">本站总浏览量 :</div><div class="item-count" id="busuanzi_value_site_pv"><i class="fa-solid fa-spinner fa-spin"></i></div></div><div class="webinfo-item"><div class="item-name">最后更新时间 :</div><div class="item-count" id="last-push-date" data-lastPushDate="2025-08-24T10:37:13.181Z"><i class="fa-solid fa-spinner fa-spin"></i></div></div></div></div><div class="card-widget user-map" id="user-map"><div class="item-headline"><i class="fas fa-heartbeat"></i><span>访客地图</span></div><div class="item-content"><script type="text/javascript" id="clstr_globe" src="//clustrmaps.com/globe.js?d=5V2tOKp8qAdRM-i8eu7ETTO9ugt5uKbbG-U7Yj8uMl8"></script></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>

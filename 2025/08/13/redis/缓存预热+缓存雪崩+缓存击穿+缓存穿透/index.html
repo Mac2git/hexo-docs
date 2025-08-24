@@ -1,0 +1,441 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>缓存预热+缓存雪崩+缓存击穿+缓存穿透 | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="缓存预热 使用@PostConstruct初始化白名单数据 缓存雪崩 发生	  redis主机挂了，redis 全盘崩溃，偏硬件运维 redis中有大量key同时过期大面积失效，偏软件开发   预防+解决  redis中key设置为永不过期或过期时间错开 redis缓存集群实现高可用 主从节点 Redis Cluster（redis集群） 开启redis持久化机制aof&#x2F;rdb，尽快恢复">
+<meta property="og:type" content="article">
+<meta property="og:title" content="缓存预热+缓存雪崩+缓存击穿+缓存穿透">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/2025/08/13/redis/%E7%BC%93%E5%AD%98%E9%A2%84%E7%83%AD+%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9+%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF+%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="缓存预热 使用@PostConstruct初始化白名单数据 缓存雪崩 发生	  redis主机挂了，redis 全盘崩溃，偏硬件运维 redis中有大量key同时过期大面积失效，偏软件开发   预防+解决  redis中key设置为永不过期或过期时间错开 redis缓存集群实现高可用 主从节点 Redis Cluster（redis集群） 开启redis持久化机制aof&#x2F;rdb，尽快恢复">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://pic.crazytaxii.com/Redis_Logo.png">
+<meta property="article:published_time" content="2025-08-12T16:00:00.000Z">
+<meta property="article:modified_time" content="2025-08-22T17:03:49.491Z">
+<meta property="article:author" content="Lazy">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic.crazytaxii.com/Redis_Logo.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "缓存预热+缓存雪崩+缓存击穿+缓存穿透",
+  "url": "https://mac2git.github.io/hexo-docs/2025/08/13/redis/%E7%BC%93%E5%AD%98%E9%A2%84%E7%83%AD+%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9+%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF+%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F/",
+  "image": "https://pic.crazytaxii.com/Redis_Logo.png",
+  "datePublished": "2025-08-12T16:00:00.000Z",
+  "dateModified": "2025-08-22T17:03:49.491Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lazy",
+      "url": "https://mac2git.github.io/hexo-docs"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/%E7%BC%93%E5%AD%98%E9%A2%84%E7%83%AD+%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9+%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF+%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '缓存预热+缓存雪崩+缓存击穿+缓存穿透',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(https://pic.crazytaxii.com/Redis_Logo.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a><a class="nav-page-title" href="/hexo-docs/"><span class="site-name">缓存预热+缓存雪崩+缓存击穿+缓存穿透</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">缓存预热+缓存雪崩+缓存击穿+缓存穿透</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-08-22T17:03:49.491Z" title="更新于 2025-08-23 01:03:49">2025-08-23</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Redis/">后端 Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">3.3k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>13分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="缓存预热"><a href="#缓存预热" class="headerlink" title="缓存预热"></a>缓存预热</h2><p><img src="/hexo-docs/images/redisImages/image-20250704102238568.png" alt="image-20250704102238568"></p>
+<p>使用<code>@PostConstruct</code>初始化白名单数据</p>
+<h2 id="缓存雪崩"><a href="#缓存雪崩" class="headerlink" title="缓存雪崩"></a>缓存雪崩</h2><ul>
+<li><p>发生	</p>
+<ul>
+<li>redis主机挂了，redis 全盘崩溃，偏硬件运维</li>
+<li>redis中有大量key同时过期大面积失效，偏软件开发</li>
+</ul>
+</li>
+<li><p>预防+解决</p>
+<ul>
+<li>redis中key设置为永不过期或过期时间错开</li>
+<li>redis缓存集群实现高可用<ul>
+<li>主从节点</li>
+<li>Redis Cluster（redis集群）</li>
+<li>开启redis持久化机制aof&#x2F;rdb，尽快恢复缓存集群</li>
+</ul>
+</li>
+<li>多缓存结合预防雪崩<ul>
+<li>ehcache本地缓存+redis缓存</li>
+</ul>
+</li>
+<li>服务降级<ul>
+<li>Hystrix或者阿里Sentinel限流&amp;降级</li>
+</ul>
+</li>
+<li>人民币玩家<ul>
+<li>阿里云数据库Redis版</li>
+<li><a target="_blank" rel="noopener" href="https://www.aliyun.com/activity/database/bestoffers?utm_content=se_1019851947">数据库上云优选_数据库产品低至3折起-阿里云权益中心</a></li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="缓存穿透"><a href="#缓存穿透" class="headerlink" title="缓存穿透"></a>缓存穿透</h2><p>  请求去查询一条记录，先查redis（无），后查mysql（无），都查不到该条记录，但是请求每次都会打到数据库上面去，导致后台数据库暴增，这种现象称为<strong>缓存穿透</strong>。</p>
+<h3 id="解决"><a href="#解决" class="headerlink" title="解决"></a>解决</h3><p><img src="/hexo-docs/images/redisImages/image-20250704103149152.png" alt="image-20250704103149152"></p>
+<ul>
+<li><p>空对象缓存或者缺省值（只能解决暂时）</p>
+<ul>
+<li><p>一般ok</p>
+<ul>
+<li><strong>第一种解决方案，回写增强</strong></li>
+</ul>
+<p>如果发生了缓存穿透，我们可以针对要查询的数据，在Redis里存一个和业务部门商量后确定的缺省值(比如，零、负数、defaultNull等)。</p>
+<p>比如，键uid:abcdxxx，值defaultNull作为案例的key和value</p>
+<p>先去redis查键uid:abcdxxx没有，再去mysql查没有获得 ，这就发生了一次穿透现象。</p>
+<p>but，可以增强回写机制</p>
+<p>mysql也查不到的话也让redis存入刚刚查不到的key并保护mysql。</p>
+<p>第一次来查询uid:abcdxxx，redis和mysql都没有，返回null给调用者，但是增强回写后第二次来查uid:abcdxxx，此时redis就有值了。</p>
+<p>可以直接从Redis中读取default缺省值返回给业务应用程序，避免了把大量请求发送给mysql处理，打爆mysql。</p>
+<p><strong>但是，此方法架不住黑客的恶意攻击，有缺陷……，只能解决key相同的情况</strong></p>
+</li>
+<li><p>但是黑客或者恶意攻击</p>
+<ul>
+<li>黑客会对你的系统进行攻击，拿一个不存在的id去查询数据，会产生大量的请求到数据库去查询。可能会导致你的数据库由于压力过大而宕掉。</li>
+<li>key相同打你系统<ul>
+<li>第一次打到mysql，空对象缓存后第二次defaultNull缺省值，避免mysql被攻击，不用再到数据库中去走一圈了</li>
+</ul>
+</li>
+<li>key不同打你系统<ul>
+<li>由于存在空对象缓存和缓存会写（看自己业务不限死），redis中的无关紧要的key也会越写越多（<strong>记得设置redis过期时间</strong>）</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>Google布隆过滤器Guava解决缓存穿透</p>
+<ul>
+<li><p>Guava 中布隆过滤器的实现算是比较权威的，所以实际项目中我们可以直接使用Guava布隆过滤器</p>
+<p>案例</p>
+<ul>
+<li><p>架构说明</p>
+<ul>
+<li><img src="/hexo-docs/images/redisImages/image-20250704115619799.png" alt="image-20250704115619799"></li>
+</ul>
+</li>
+<li><p>误判问题，但是概率小可以接受，不能从布隆过滤器删除</p>
+</li>
+<li><p>全部合法的key都需要放入Guava版本布隆过滤器+redis里面，不然数据就是返回null</p>
+</li>
+<li><p><code>pom</code></p>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="comment">&lt;!--guava Google 开源的 Guava 中自带的布隆过滤器--&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.google.guava<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>guava<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>23.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-web<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- redis --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-data-redis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.commons<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>commons-pool2<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-test<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">scope</span>&gt;</span>test<span class="tag">&lt;/<span class="name">scope</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>yaml</code></p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">port:</span> <span class="number">8080</span></span><br><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">Redis7_study</span></span><br><span class="line">  <span class="attr">data:</span></span><br><span class="line">    <span class="attr">redis:</span></span><br><span class="line">      <span class="attr">host:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.133</span> <span class="comment"># redis IP 地址</span></span><br><span class="line">      <span class="attr">database:</span> <span class="number">0</span> <span class="comment"># redis 0号数据库</span></span><br><span class="line">      <span class="attr">port:</span> <span class="number">6379</span> <span class="comment"># redis 端口</span></span><br><span class="line">      <span class="attr">password:</span> <span class="string">redis</span> <span class="comment"># redis 密码</span></span><br><span class="line">      <span class="attr">lettuce:</span></span><br><span class="line">        <span class="attr">pool:</span> <span class="comment"># lettuce 连接池</span></span><br><span class="line">          <span class="attr">max-active:</span> <span class="number">8</span> <span class="comment"># 连接池最大连接数</span></span><br><span class="line">          <span class="attr">max-wait:</span> <span class="string">-1ms</span> <span class="comment"># 连接池最大阻塞等待</span></span><br><span class="line">          <span class="attr">max-idle:</span> <span class="number">8</span> <span class="comment"># 连接池最大空闲连接</span></span><br><span class="line">          <span class="attr">min-idle:</span> <span class="number">0</span> <span class="comment"># 连接池最小空闲连接</span></span><br></pre></td></tr></table></figure>
+
+<p>小demo</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.alibaba.google.common.hash.BloomFilter;</span><br><span class="line"><span class="keyword">import</span> com.alibaba.google.common.hash.Funnels;</span><br><span class="line"><span class="keyword">import</span> org.junit.jupiter.api.Test;</span><br><span class="line"><span class="keyword">import</span> org.springframework.boot.test.context.SpringBootTest;</span><br><span class="line"></span><br><span class="line"><span class="meta">@SpringBootTest</span></span><br><span class="line"><span class="keyword">class</span> <span class="title class_">Redis7StudyApplicationTests</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Test</span></span><br><span class="line">    <span class="keyword">void</span> <span class="title function_">guavaWithBloomFilter</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">//创建布隆过滤器</span></span><br><span class="line">        BloomFilter&lt;Integer&gt; bloomFilter = BloomFilter.create(Funnels.integerFunnel(), <span class="number">100</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//是否有该数据</span></span><br><span class="line">        System.out.println(bloomFilter.mightContain(<span class="number">1</span>));</span><br><span class="line">        System.out.println(bloomFilter.mightContain(<span class="number">2</span>));</span><br><span class="line"></span><br><span class="line">        <span class="comment">//添加数据</span></span><br><span class="line">        bloomFilter.put(<span class="number">1</span>);</span><br><span class="line">        bloomFilter.put(<span class="number">2</span>);</span><br><span class="line">        <span class="comment">//是否有该数据</span></span><br><span class="line">        System.out.println(bloomFilter.mightContain(<span class="number">1</span>));</span><br><span class="line">        System.out.println(bloomFilter.mightContain(<span class="number">2</span>));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250704120703494.png" alt="image-20250704120703494"></p>
+</li>
+<li><p>实操：取样本100w数据，查查不在100w范围内，其他10w数据是否存在</p>
+<p><code>GuavaBloomFilterService</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.alibaba.google.common.hash.BloomFilter;</span><br><span class="line"><span class="keyword">import</span> com.alibaba.google.common.hash.Funnels;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.ArrayList;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">GuavaBloomFilterService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Integer</span> <span class="variable">_1W</span> <span class="operator">=</span> <span class="number">1000</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Integer</span> <span class="variable">SIZE</span> <span class="operator">=</span> <span class="number">100</span> * _1W;<span class="comment">//100w条数据</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">double</span> <span class="variable">fpp</span> <span class="operator">=</span> <span class="number">0.03</span>;<span class="comment">//误判率</span></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> BloomFilter&lt;Integer&gt; bloomFilter = BloomFilter.create(Funnels.integerFunnel(), SIZE, fpp);</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">guavaBloomFilter</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="comment">//向布隆过滤器添加100w条数据</span></span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">1</span>; i &lt;= SIZE ; i++) &#123;</span><br><span class="line">            bloomFilter.put(i);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="comment">//取10万个不在过滤器里的值，看看有多少个会被认为在过滤器里</span></span><br><span class="line">        ArrayList&lt;Integer&gt; list = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;(<span class="number">10</span> * _1W);</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> SIZE+<span class="number">1</span>; i &lt;= SIZE + (<span class="number">10</span> * _1W); i++) &#123;</span><br><span class="line">            <span class="keyword">if</span> (bloomFilter.mightContain(i)) &#123;</span><br><span class="line">                list.add(i);</span><br><span class="line">                log.info(<span class="string">&quot;误判了：&#123;&#125;&quot;</span>,i);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        log.info(<span class="string">&quot;误判总数是：&#123;&#125;&quot;</span>,list.size());</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>GuavaBloomFilterController</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.controller;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.service.GuavaBloomFilterService;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.GetMapping;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.RestController;</span><br><span class="line"></span><br><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">GuavaBloomFilterController</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> GuavaBloomFilterService guavaBloomFilterService;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/guavaFilter&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">guavaFilter</span><span class="params">()</span> &#123;</span><br><span class="line">        guavaBloomFilterService.guavaBloomFilter();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>结果</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250704122108315.png" alt="image-20250704122108315"></p>
+</li>
+</ul>
+</li>
+<li><p>为什么误判率写0.03</p>
+<p>Guava选择<strong>0.03作为默认误判率</strong>，本质是在内存开销（空间）与准确性（误报）间选取的<strong>工程最优解</strong>。用户可根据业务需求灵活调整，但若未显式指定，0.03能确保大多数场景下高效且可靠。hash函数占5个，效率更好，如果越精确，效率越慢！</p>
+<table>
+<thead>
+<tr>
+<th align="left">FPP</th>
+<th align="left">哈希函数数量</th>
+<th align="left">内存占用 (百万元素)</th>
+<th align="left">适用场景</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">0.01</td>
+<td align="left">7</td>
+<td align="left">~11.5 MB</td>
+<td align="left">高精度要求（如安全）</td>
+</tr>
+<tr>
+<td align="left"><strong>0.03</strong></td>
+<td align="left">5</td>
+<td align="left"><strong>~7.1 MB</strong></td>
+<td align="left"><strong>通用默认（Guava）</strong></td>
+</tr>
+<tr>
+<td align="left">0.1</td>
+<td align="left">4</td>
+<td align="left">~4.8 MB</td>
+<td align="left">内存敏感场景</td>
+</tr>
+</tbody></table>
+<p><img src="/hexo-docs/images/redisImages/image-20250704122337666.png" alt="image-20250704122337666"></p>
+</li>
+<li><p>布隆过滤器说明</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250704122403226.png" alt="image-20250704122403226"></p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="缓存击穿"><a href="#缓存击穿" class="headerlink" title="缓存击穿"></a>缓存击穿</h2><p>大量请求同时查询同一个key时，此时这个key正好失效，就会导致大量的请求都打到数据库上面去，简单来说就是热点key突然失效了，暴打MySQL</p>
+<p>穿透和击穿，截然不同</p>
+<h3 id="危害"><a href="#危害" class="headerlink" title="危害"></a>危害</h3><ul>
+<li>会造成某一时刻数据库请求量过大，压力剧增</li>
+<li>需要知道热点key有哪些，防止击穿</li>
+</ul>
+<h3 id="解决-1"><a href="#解决-1" class="headerlink" title="解决"></a>解决</h3><ul>
+<li><p>热点key失效</p>
+<ul>
+<li>时间到了自然清除但还被访问到</li>
+<li>delete掉的key，刚巧又被访问</li>
+</ul>
+</li>
+<li><p>方案1</p>
+<ul>
+<li>差异失效时间，对于访问频繁的热点key，干脆就不设置过期时间</li>
+</ul>
+</li>
+<li><p>方案2</p>
+<ul>
+<li><p>互斥更新，采用双检枷锁策略</p>
+<p>多个线程同时去查询数据库的这条数据，那么我们可以在第一个查询数据的请求上使用一个 互斥锁来锁住它。</p>
+<p>其他的线程走到这一步拿不到锁就等着，等第一个线程查询到了数据，然后做缓存。后面的线程进来发现已经有缓存了，就直接走缓存。</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250629162233989.png"></p>
+</li>
+</ul>
+</li>
+</ul>
+<h3 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h3><p>模拟高并发的天猫聚划算案例代码</p>
+<table>
+<thead>
+<tr>
+<th>步骤</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>1</td>
+<td>100%高并发，绝对不可以用mysql实现</td>
+</tr>
+<tr>
+<td>2</td>
+<td>先把mysql里面参加活动的数据抽取进redis，一般采用定时器扫描来决定上线活动还是下线取消。</td>
+</tr>
+<tr>
+<td>3</td>
+<td>支持分页功能，一页20条记录</td>
+</tr>
+</tbody></table>
+<p>redis数据类型使用list，因为zset更适合做排行榜</p>
+<p><code>pom、yaml</code>参考上面的</p>
+<p>实体类</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.pojo;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> lombok.AllArgsConstructor;</span><br><span class="line"><span class="keyword">import</span> lombok.Data;</span><br><span class="line"><span class="keyword">import</span> lombok.NoArgsConstructor;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="meta">@AllArgsConstructor</span></span><br><span class="line"><span class="meta">@NoArgsConstructor</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Product</span> &#123;</span><br><span class="line">    <span class="comment">//产品ID</span></span><br><span class="line">    <span class="keyword">private</span> Long id;</span><br><span class="line">    <span class="comment">//产品名称</span></span><br><span class="line">    <span class="keyword">private</span> String name;</span><br><span class="line">    <span class="comment">//产品价格</span></span><br><span class="line">    <span class="keyword">private</span> Integer price;</span><br><span class="line">    <span class="comment">//产品详情</span></span><br><span class="line">    <span class="keyword">private</span> String detail;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>service</code>：采用定时器将参与聚划算活动的特价商品新增进redis中</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.pojo.Product;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.PostConstruct;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.ArrayList;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.Random;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.TimeUnit;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">JHSTaskService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">KEY</span> <span class="operator">=</span> <span class="string">&quot;jhs&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String, Object&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> List&lt;Product&gt; <span class="title function_">getProductFormMysql</span><span class="params">()</span> &#123;</span><br><span class="line">        List&lt;Product&gt; productList = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">1</span>; i &lt;= <span class="number">20</span>; i++) &#123;</span><br><span class="line">            <span class="type">Random</span> <span class="variable">random</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Random</span>();</span><br><span class="line">            <span class="type">int</span> <span class="variable">id</span> <span class="operator">=</span> random.nextInt(<span class="number">100</span>);</span><br><span class="line">            <span class="type">Product</span> <span class="variable">product</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Product</span>((<span class="type">long</span>) id, <span class="string">&quot;product&quot;</span> + i, i, <span class="string">&quot;detail&quot;</span>);</span><br><span class="line">            productList.add(product);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> productList;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@PostConstruct</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">init</span><span class="params">()</span> &#123;</span><br><span class="line">        log.info(<span class="string">&quot;启动定时器淘宝聚划算功能模拟..........&#123;&#125;&quot;</span>, System.currentTimeMillis());</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">Thread</span>(() -&gt; &#123;</span><br><span class="line">            <span class="comment">//模拟定时器后台一个任务，定时把数据库的特价商品，刷新到redis中</span></span><br><span class="line">            <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">                <span class="comment">//模拟从数据库读取20件特价商品，用于加载到聚划算的页面中</span></span><br><span class="line">                List&lt;Product&gt; list = <span class="built_in">this</span>.getProductFormMysql();</span><br><span class="line">                <span class="comment">//先删除redis有的key</span></span><br><span class="line">                redisTemplate.delete(KEY);</span><br><span class="line">                <span class="comment">//使用lpush添加到redis中</span></span><br><span class="line">                redisTemplate.opsForList().leftPush(KEY, list);</span><br><span class="line">                <span class="comment">//间隔一分钟 执行一遍，模拟聚划算每3天刷新一批次参加活动</span></span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">1</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(e);</span><br><span class="line">                &#125;</span><br><span class="line">                log.info(<span class="string">&quot;runJhs定时刷新....&quot;</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">&quot;t1&quot;</span>).start();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>controller</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.controller;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.pojo.Product;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.GetMapping;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.RestController;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"></span><br><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">JHSProductController</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">KEY</span> <span class="operator">=</span> <span class="string">&quot;jhs&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String, Product&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/product/find&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> List&lt;Product&gt; <span class="title function_">find</span><span class="params">(<span class="type">int</span> page, <span class="type">int</span> size)</span> &#123;</span><br><span class="line">        List&lt;Product&gt; productList = <span class="literal">null</span>;</span><br><span class="line">        <span class="type">long</span> <span class="variable">start</span> <span class="operator">=</span> (<span class="type">long</span>) (page - <span class="number">1</span>) * size;</span><br><span class="line">        <span class="type">long</span> <span class="variable">end</span> <span class="operator">=</span> start + size;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">//采用redis list数据结构的lrange命令实现分页查询</span></span><br><span class="line">            productList = redisTemplate.opsForList().range(KEY, start, end);</span><br><span class="line">            <span class="keyword">if</span> (productList != <span class="literal">null</span> &amp;&amp; productList.isEmpty()) &#123;</span><br><span class="line">                <span class="comment">//TODO 查询mysql</span></span><br><span class="line">            &#125;</span><br><span class="line">            log.info(<span class="string">&quot;查询结果：&#123;&#125;&quot;</span>,productList);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            <span class="comment">//这里的异常，一般是redis瘫痪 ，或 redis网络timeout</span></span><br><span class="line">            e.printStackTrace();</span><br><span class="line">            <span class="comment">//TODO 走MySQL查询</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> productList;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="bug和隐患"><a href="#bug和隐患" class="headerlink" title="bug和隐患"></a>bug和隐患</h3><p>热点key突然失效导致可怕的缓存击穿</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250705135318742.png" alt="image-20250705135318742"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250705135327790.png" alt="image-20250705135327790"></p>
+<ul>
+<li>delete命令执行的一瞬间有空隙，其他请求线程继续找Redis为null</li>
+<li>打到了mysql，暴击….</li>
+</ul>
+<p><img src="/hexo-docs/images/redisImages/image-20250705135428008.png" alt="image-20250705135428008"></p>
+<p>最终目的</p>
+<ul>
+<li>两条原子性还是其次，主要是防止key突然失效暴击mysql打爆系统</li>
+</ul>
+<h3 id="解决方案"><a href="#解决方案" class="headerlink" title="解决方案"></a>解决方案</h3><ul>
+<li><p>采用双检枷锁策略</p>
+<p>多个线程同时去查询数据库的这条数据，那么我们可以在第一个查询数据的请求上使用一个 互斥锁来锁住它。</p>
+<p>其他的线程走到这一步拿不到锁就等着，等第一个线程查询到了数据，然后做缓存。后面的线程进来发现已经有缓存了，就直接走缓存。</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250629162233989.png"></p>
+</li>
+<li><p>差异失效时间</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250705135638675.png" alt="image-20250705135638675"></p>
+</li>
+</ul>
+<p>我们采用差异失效时间来设置</p>
+<p>更新<code>JHSTaskService</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.pojo.Product;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.PostConstruct;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.ArrayList;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.Random;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.TimeUnit;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">JHSTaskService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">KEY_A</span> <span class="operator">=</span> <span class="string">&quot;jhs:a&quot;</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">KEY_B</span> <span class="operator">=</span> <span class="string">&quot;jhs:b&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String, Object&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> List&lt;Product&gt; <span class="title function_">getProductFormMysql</span><span class="params">()</span> &#123;</span><br><span class="line">        List&lt;Product&gt; productList = <span class="keyword">new</span> <span class="title class_">ArrayList</span>&lt;&gt;();</span><br><span class="line">        <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">1</span>; i &lt;= <span class="number">20</span>; i++) &#123;</span><br><span class="line">            <span class="type">Random</span> <span class="variable">random</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Random</span>();</span><br><span class="line">            <span class="type">int</span> <span class="variable">id</span> <span class="operator">=</span> random.nextInt(<span class="number">100</span>);</span><br><span class="line">            <span class="type">Product</span> <span class="variable">product</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Product</span>((<span class="type">long</span>) id, <span class="string">&quot;product&quot;</span> + i, i, <span class="string">&quot;detail&quot;</span>);</span><br><span class="line">            productList.add(product);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> productList;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@PostConstruct</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">initAB</span><span class="params">()</span> &#123;</span><br><span class="line">        log.info(<span class="string">&quot;启动定时器淘宝聚划算功能模拟..........&#123;&#125;&quot;</span>, System.currentTimeMillis());</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">Thread</span>(() -&gt; &#123;</span><br><span class="line">            <span class="comment">//模拟定时器后台一个任务，定时把数据库的特价商品，刷新到redis中</span></span><br><span class="line">            <span class="keyword">while</span> (<span class="literal">true</span>) &#123;</span><br><span class="line">                <span class="comment">//模拟从数据库读取20件特价商品，用于加载到聚划算的页面中</span></span><br><span class="line">                List&lt;Product&gt; list = <span class="built_in">this</span>.getProductFormMysql();</span><br><span class="line">                <span class="comment">//删除b缓存</span></span><br><span class="line">                redisTemplate.delete(KEY_B);</span><br><span class="line">                <span class="comment">//先更新b缓存</span></span><br><span class="line">                redisTemplate.opsForList().leftPush(KEY_B, list);</span><br><span class="line">                <span class="comment">//设置b缓存的过期时间，要比a的过期时间长</span></span><br><span class="line">                redisTemplate.expire(KEY_B, <span class="number">20L</span>, TimeUnit.DAYS);</span><br><span class="line">                <span class="comment">//删除a的缓存</span></span><br><span class="line">                redisTemplate.delete(KEY_A);</span><br><span class="line">                <span class="comment">//在更新a的缓存</span></span><br><span class="line">                redisTemplate.opsForList().leftPush(KEY_A, list);</span><br><span class="line">                redisTemplate.expire(KEY_A, <span class="number">15L</span>, TimeUnit.DAYS);</span><br><span class="line">                <span class="comment">//间隔一分钟 执行一遍，模拟聚划算每3天刷新一批次参加活动</span></span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    TimeUnit.SECONDS.sleep(<span class="number">1</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(e);</span><br><span class="line">                &#125;</span><br><span class="line">                log.info(<span class="string">&quot;runJhs定时刷新双缓存AB两层....&quot;</span>);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;, <span class="string">&quot;t1&quot;</span>).start();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>更新<code>JHSProductController</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.controller;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.pojo.Product;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.GetMapping;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.RestController;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"></span><br><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">JHSProductController</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">KEY_A</span> <span class="operator">=</span> <span class="string">&quot;jhs:a&quot;</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">KEY_B</span> <span class="operator">=</span> <span class="string">&quot;jhs:b&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String, Product&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/product/findab&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> List&lt;Product&gt; <span class="title function_">findAB</span><span class="params">(<span class="type">int</span> page, <span class="type">int</span> size)</span> &#123;</span><br><span class="line">        List&lt;Product&gt; productList = <span class="literal">null</span>;</span><br><span class="line">        <span class="type">long</span> <span class="variable">start</span> <span class="operator">=</span> (<span class="type">long</span>) (page - <span class="number">1</span>) * size;</span><br><span class="line">        <span class="type">long</span> <span class="variable">end</span> <span class="operator">=</span> start + size;</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            <span class="comment">//采用redis list数据结构的lrange命令实现分页查询</span></span><br><span class="line">            productList = redisTemplate.opsForList().range(KEY_A, start, end);</span><br><span class="line">            <span class="keyword">if</span> (productList != <span class="literal">null</span> &amp;&amp; productList.isEmpty()) &#123;</span><br><span class="line">                <span class="comment">//查询缓存b</span></span><br><span class="line">                productList = redisTemplate.opsForList().range(KEY_B, start, end);</span><br><span class="line">                <span class="keyword">if</span> (productList!=<span class="literal">null</span>&amp;&amp;productList.isEmpty()) &#123;</span><br><span class="line">                    <span class="comment">//TODO 查询mysql</span></span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">            log.info(<span class="string">&quot;查询结果：&#123;&#125;&quot;</span>,productList);</span><br><span class="line">        &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">            <span class="comment">//这里的异常，一般是redis瘫痪 ，或 redis网络timeout</span></span><br><span class="line">            e.printStackTrace();</span><br><span class="line">            <span class="comment">//TODO 走MySQL查询</span></span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> productList;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h2 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h2><p><img src="/hexo-docs/images/redisImages/image-20250705135428008.png" alt="image-20250705135428008"></p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs">Lazy</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/%E7%BC%93%E5%AD%98%E9%A2%84%E7%83%AD+%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9+%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF+%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F/">https://mac2git.github.io/hexo-docs/2025/08/13/redis/缓存预热+缓存雪崩+缓存击穿+缓存穿透/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://mac2git.github.io/hexo-docs" target="_blank">Lazy的个人博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/hexo-docs/tags/Redis/">Redis</a></div><div class="post-share"><div class="social-share" data-image="https://pic.crazytaxii.com/Redis_Logo.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/transactions&amp;pipeline/" title="管道&amp;事务"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">管道&事务</div></div><div class="info-2"><div class="info-item-1">Redis事务可以一次执行多个命令，本质是一组命令的集合。一个事务中的所有命令都会序列化，按顺序地串行化而不会被其他命令插入，不许加塞 能干嘛？ 一个队列中，一次性、顺序性、排他性的执行一系列命令 redis事务 vs 数据库事务   1 单独的隔离操作 Redis的事务仅仅是保证事务里的操作会被连续独占的执行，redis命令执行是单线程架构，在执行完事务内所有指令前是不可能再去同时执行其他客户端的请求的    2 没有隔离级别的概念 因为事务提交前任何指令都不会被实际执行，也就不存在”事务内的查询要看到事务里的更新，在事务外查询不能看到”这种问题了   3不保证原子性 Redis的事务不保证原子性，也就是不保证所有指令同时成功或同时失败，只有决定是否开始执行全部指令的能力，没有执行到一半进行回滚的能力   4 排它性 Redis会保证一个事务内的命令依次执行，而不会被其它命令插入   常用命令   序号 描述    1 discard：取消事务，放弃执行事务块内的所以命令   2 exec：执行所有事务块内的命令   3 multi：标记一个事务块的开始   4 unwatch...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/redis%E7%BB%8F%E5%85%B8%E4%BA%94%E5%A4%A7%E7%B1%BB%E5%9E%8B%E5%8F%8A%E5%BA%95%E5%B1%82%E5%AE%9E%E7%8E%B0/" title="Redis经典五大类型源码及底层实现"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Redis经典五大类型源码及底层实现</div></div><div class="info-2"><div class="info-item-1">Redis经典五大类型源码及底层实现本源码基于redis7.0.5 Redis数据类型和底层数据结构  SDS动态字符串 双向链表 压缩列表ziplist 哈希表hashtable 跳表skiplist 整数集合intset 快速列表quicklist 紧凑列表listpack  源码在哪里？ github ：https://github.com/redis/redis  Redis核心部分src源码包下面该如何看？ Redis基本数据结构（骨架） Github官网说明   Redis对象object.c 字符串t_string.c 列表t_list.c 字典t_hash.c 集合及有序集合t_set.c和t_zset.c 数据流t_stream.c：Streams的底层实现结构listpack.c和rax.c   简单动态字符串sds.c  整数集合intset.c  压缩列表ziplist.c  快速链表quicklist.c  listpack（紧凑列表）  字典dict.c   Redis数据库的实现 数据库的底层实现db.c 持久化rdb.c和aof.c  Redis服...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RedLock算法和底层源码分析和缓存淘汰策略</div></div><div class="info-2"><div class="info-item-1">上一章自研的redis锁对于一般中小公司，不是特别高并发场景足够用了，单机redis小业务也撑得住。但是对于特别高并发场景的话，就得使用Redisson了 Redis分布式锁-RedLock红锁算法（Distributed locks with Redis）官网：Redis 的分布式锁 |文档 说明：  为什么学习这个？怎样产生的？   线程 1 首先获取锁成功，将键值对写入 redis 的 master 节点，在 redis 将该键值对同步到 slave 节点之前，master 发生了故障；redis 触发故障转移，其中一个 slave 升级为新的 master，此时新上位的master并不包含线程1写入的键值对，因此线程 2 尝试获取锁也可以成功拿到锁，此时相当于有两个线程获取到了锁，可能会导致各种预期之外的情况发生，例如最常见的脏数据。  我们加的是排它独占锁，同一时间只能有一个建redis锁成功并持有锁，严禁出现2个以上的请求线程拿到锁。危险的！ RedLock算法设计理念Redis也提供了Redlock算法，用来实现基于多个实例的分布式锁。锁变量由多个实例维护，即使有实...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RDB+AOF</div></div><div class="info-2"><div class="info-item-1">redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 RDB（Redis 数据库）：RDB 持久性以指定的时间间隔执行数据集的时间点快照。  rdb（redis database）能干嘛？ 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot内存快照，它恢复时再将硬盘快照文件直接读回到内存里。Redis的数据都在内存中，保存备份时它执行的是全量快照，也就是说，把内存中的所有数据都记录到磁盘中，一锅端。 Rdb保存的是dump.rdb文件  Redis6.0.16以下  Redis6.2以及Redis-7.0.0  自动触发 redis7版本，按照redis.conf里配置的save&lt;seconds&gt;&lt...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">BigKey和缓存双写</div></div><div class="info-2"><div class="info-item-1">Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。—貌似  2020年5月版本的6.0.x后及2022年出的7.0版本后，告别了大家印象中的单线程，用一种全新的多线程来解决问题。—实锤   几个里程碑的redis版本！  5.0版本是直接升级到6.0版本，对于这个激进的升级，Redis之父antirez表现得很有信心和兴奋， 所以第一时间发文来阐述6.0的一些重大功能”Redis 6.0.0 GA is out!” 当然，Redis7.0后版本更加厉害  Redis是单线程 主要是指Redis的网络IO和键值对读写是由一个线程来完成的，Redis在处理客户端的请求时包括获取 (socket 读)、解析、执行、内容返回 (socket 写...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">Redis基础</div></div><div class="info-2"><div class="info-item-1">什么是Redis？Redis 是一个内存数据存储，被数百万开发者用作缓存、向量数据库、文档数据库、流式引擎和消息代理。Redis 具有内置的复制和不同级别的磁盘持久化。它支持复杂的数据类型（例如，字符串、散列、列表、集合、有序集合和 JSON），并为这些数据类型定义了原子操作。 Redis 通常被称为数据结构服务器。这意味着 Redis 通过一组命令提供对可变数据结构的访问，这些命令通过 TCP 套接字和简单协议使用服务器-客户端模型发送。因此，不同的进程可以以共享的方式查询和修改相同的数据结构。 Redis 实现的数据结构具有一些特殊的属性：  Redis 会将其存储在磁盘上，即使它们总是被服务器内存中读取和修改。这意味着 Redis 速度快，但同时也非易失性。 数据结构的实现强调内存效率，因此 Redis 内部的数据结构可能比使用高级编程语言建模的相同数据结构模型使用更少的内存。 Redis 提供了一系列数据库中常见的功能，如复制、可调的持久性级别、集群和高度可用性。  下载Redis 命名规则： ​	版本号第二位如果是奇数，则为非稳定版本，如2.7、2.9、3.1 ​	版本...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">epoll函数和IO多路复用深度解析</div></div><div class="info-2"><div class="info-item-1">epoll 函数和 IO 多路复用深度解析没有 epoll 和 IO 多路复用之前多路复用要解决的问题并发多客户端连接，在多路复用之前最简单和典型的方案：同步阻塞网络IO模型 这种模式的特点就是用一个进程来处理一个网络连接(一个用户请求)，比如一段典型的示例代码如下。 直接调用 recv 函数从一个 socket 上读取数据。 int main()&#123; ... recv(sock, ...) //从用户角度来看非常简单，一个recv一用，要接收的数据就到我们手里了。&#125;  我们来总结一下这种方式： 优点： 就是这种方式非常容易让人理解，写起代码来非常的自然，符合人的直线型思维。 缺点： 就是性能差，每个用户请求到来都得占用一个进程来处理，来一个请求就要分配一个进程跟进处理， 类似一个学生配一个老师，一位患者配一个医生，可能吗？进程是一个很笨重的东西。一台服务器上创建不了多少个进程。 结论进程在 Linux 上是一个开销不小的家伙，先不说创建，光是上下文切换一次就得几个微秒。所以为了高效地对海量用户提供服务，必须要让一个进程能同时处理很多个 tcp 连接才行。现在假...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/" title="HyperLogLog&amp;Geo&amp;Bitmap"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">HyperLogLog&amp;Geo&amp;Bitmap</div></div><div class="info-2"><div class="info-item-1">统计类型有哪些？ 亿级系统中常见的四种统计  聚合统计 统计多个集合元素的聚合结果，就是前面的交集差集等集合统计   排序统计（zset） 在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet  因为可以使用分页，正反排序  二值统计（bitmap） 集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）  基数统计（hyperloglog） 指 统计一个集合不重复元素个数     HyperLogLog名词解释  什么是UV?  Unique Visitor，独立访客，一般理解为客户端IP 需要去重考虑，例如一个人一天访问了10次网站，一天的UV就是1   什么是PV?  Page View，页面浏览量 不用去重，例如一个人一天访问了10次网站，一天的PV就是10   什么是DAU?  Daily  Active User  日活跃用户量 登录或者使用了某个产品的用户数（去重复登录的用户），避免恶意刷单  常用于反映网站，互联网应用或者网络游戏的运营情况      什么是MAU？  Monthly...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%A2%84%E7%83%AD"><span class="toc-number">1.</span> <span class="toc-text">缓存预热</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E9%9B%AA%E5%B4%A9"><span class="toc-number">2.</span> <span class="toc-text">缓存雪崩</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E7%A9%BF%E9%80%8F"><span class="toc-number">3.</span> <span class="toc-text">缓存穿透</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3"><span class="toc-number">3.1.</span> <span class="toc-text">解决</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%87%BB%E7%A9%BF"><span class="toc-number">4.</span> <span class="toc-text">缓存击穿</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8D%B1%E5%AE%B3"><span class="toc-number">4.1.</span> <span class="toc-text">危害</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3-1"><span class="toc-number">4.2.</span> <span class="toc-text">解决</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B"><span class="toc-number">4.3.</span> <span class="toc-text">案例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#bug%E5%92%8C%E9%9A%90%E6%82%A3"><span class="toc-number">4.4.</span> <span class="toc-text">bug和隐患</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-number">4.5.</span> <span class="toc-text">解决方案</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">5.</span> <span class="toc-text">总结</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix"><img src="https://spring.io/img/projects/spring-cloud.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Netflix"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix">SpringCloud Netflix</a><time datetime="2025-08-23T16:00:00.000Z" title="发表于 2025-08-24 00:00:00">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第二章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章">SpringCloud Alibaba 第二章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第三章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章">SpringCloud Alibaba 第三章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: true,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>

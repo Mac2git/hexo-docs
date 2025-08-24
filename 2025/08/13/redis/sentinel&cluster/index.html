@@ -1,0 +1,916 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>哨兵&amp;集群 | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="哨兵（sentinel）&amp;集群（cluster）哨兵（sentinel）吹哨人巡查监控后台master主机是否故障，如果故障了根据投票数自动将某一个从库转换为新主库，继续对外服务 作用  监控redis运行状态，包括master和slave 当master down机，能自动将slave切换成新master   Redis Sentinel是Redis 的高可用性解决方案，由一个或多个Se">
+<meta property="og:type" content="article">
+<meta property="og:title" content="哨兵&amp;集群">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/2025/08/13/redis/sentinel&cluster/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="哨兵（sentinel）&amp;集群（cluster）哨兵（sentinel）吹哨人巡查监控后台master主机是否故障，如果故障了根据投票数自动将某一个从库转换为新主库，继续对外服务 作用  监控redis运行状态，包括master和slave 当master down机，能自动将slave切换成新master   Redis Sentinel是Redis 的高可用性解决方案，由一个或多个Se">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://pic.crazytaxii.com/Redis_Logo.png">
+<meta property="article:published_time" content="2025-08-12T16:00:00.000Z">
+<meta property="article:modified_time" content="2025-08-22T17:03:45.314Z">
+<meta property="article:author" content="Lazy">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic.crazytaxii.com/Redis_Logo.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "哨兵&集群",
+  "url": "https://mac2git.github.io/hexo-docs/2025/08/13/redis/sentinel&cluster/",
+  "image": "https://pic.crazytaxii.com/Redis_Logo.png",
+  "datePublished": "2025-08-12T16:00:00.000Z",
+  "dateModified": "2025-08-22T17:03:45.314Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lazy",
+      "url": "https://mac2git.github.io/hexo-docs"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/sentinel&amp;cluster/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: '哨兵&集群',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(https://pic.crazytaxii.com/Redis_Logo.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a><a class="nav-page-title" href="/hexo-docs/"><span class="site-name">哨兵&amp;集群</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">哨兵&amp;集群</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-08-22T17:03:45.314Z" title="更新于 2025-08-23 01:03:45">2025-08-23</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Redis/">后端 Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">14.6k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>59分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h1 id="哨兵（sentinel）-集群（cluster）"><a href="#哨兵（sentinel）-集群（cluster）" class="headerlink" title="哨兵（sentinel）&amp;集群（cluster）"></a>哨兵（sentinel）&amp;集群（cluster）</h1><h2 id="哨兵（sentinel）"><a href="#哨兵（sentinel）" class="headerlink" title="哨兵（sentinel）"></a>哨兵（sentinel）</h2><p>吹哨人巡查监控后台master主机是否故障，如果故障了根据<strong>投票数</strong>自动将某一个从库转换为新主库，继续对外服务</p>
+<p>作用</p>
+<ol>
+<li>监控redis运行状态，包括master和slave</li>
+<li><strong>当master down机，能自动将slave切换成新master</strong></li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250419141201643.png" alt="image-20250419141201643"></p>
+<p>Redis Sentinel是Redis 的高可用性解决方案，由一个或多个Sentinel（哨兵）实例组成。它可以监视任意多个主服务器，以及这些主服务器属下的所有从服务器，并在被监视的主服务器进入下线状态时，自动将下线主服务器属下的某个从服务器升级为新的主服务器，它的主要功能如下：</p>
+<ol>
+<li><p>主从监控</p>
+<p>Sentinel会不断地检查你的主服务器和从服务器是否运作正常。</p>
+</li>
+<li><p>消息通知</p>
+<p>当被监控的某个 Redis 服务器出现问题时， Sentinel可以通过API向管理员或者其他应用程序发送通知。</p>
+</li>
+<li><p>故障转移</p>
+<p>如果master异常，则会进行主从切换，将其中一个slave作为新master，当主服务器不能正常工作时，Sentinel会自动进行故障迁移，也就是主从切换。</p>
+</li>
+<li><p>配置中心</p>
+<p>客户端通过连接哨兵来获得当前redis服务的主节点地址</p>
+</li>
+</ol>
+<h2 id="哨兵原理"><a href="#哨兵原理" class="headerlink" title="哨兵原理"></a>哨兵原理</h2><p>Sentinel 使用的算法核心是 Raft 算法，主要用途就是用于分布式系统，系统容错，以及Leader选举，每个Sentinel都需要定期的执行以下任务：</p>
+<ul>
+<li>每个 Sentinel 会自动发现其他 Sentinel 和从服务器，它以每秒钟一次的频率向它所知的主服务器、从服务器以及其他 Sentinel 实例发送一个 PING 命令。</li>
+<li>如果一个实例（instance）距离最后一次有效回复 PING 命令的时间超过 down-after-milliseconds 选项所指定的值， 那么这个实例会被 Sentinel 标记为主观下线。 有效回复可以是： +PONG 、 -LOADING 或者 -MASTERDOWN 。</li>
+<li>如果一个主服务器被标记为主观下线， 那么正在监视这个主服务器的所有Sentinel要以每秒一次的频率确认主服务器的确进入了主观下线状态。</li>
+<li>如果一个主服务器被标记为主观下线， 并且有足够数量的Sentinel（至少要达到配置文件指定的数量）在指定的时间范围内同意这一判断， 那么这个主服务器被标记为客观下线。</li>
+<li>在一般情况下， 每个Sentinel会以每 10 秒一次的频率向它已知的所有主服务器和从服务器发送 INFO 命令。 当一个主服务器被Sentinel标记为客观下线时，Sentinel向下线主服务器的所有从服务器发送 INFO 命令的频率会从 10 秒一次改为每秒一次。</li>
+<li>当没有足够数量的Sentinel同意主服务器已经下线， 主服务器的客观下线状态就会被移除。 当主服务器重新向Sentinel的 PING 命令返回有效回复时， 主服务器的主管下线状态就会被移除.</li>
+</ul>
+<p><img src="/hexo-docs/images/redisImages/image-20250419144503922.png" alt="image-20250419144503922"></p>
+<h2 id="sentinel配置文件"><a href="#sentinel配置文件" class="headerlink" title="sentinel配置文件"></a>sentinel配置文件</h2><figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line"># 哨兵sentinel实例运行的端口，默认<span class="number">26379</span>  </span><br><span class="line">port <span class="number">26379</span></span><br><span class="line"># 是否设置为后台启动。</span><br><span class="line">daemonize no</span><br><span class="line">#pid文件地址</span><br><span class="line">pidfile /var/run/redis-sentinel.pid</span><br><span class="line">#日志文件地址</span><br><span class="line">logfile &quot;&quot;</span><br><span class="line"># 指定sentinel工作目录</span><br><span class="line"><span class="built_in">dir</span> /tmp</span><br><span class="line"># 哨兵sentinel监控的redis主节点的 </span><br><span class="line">## ip：主机ip地址</span><br><span class="line">## port：哨兵端口号</span><br><span class="line">## master-name：可以自己命名的主节点名字（只能由字母A-z、数字<span class="number">0</span>-<span class="number">9</span> 、这三个字符&quot;.-_&quot;组成。）</span><br><span class="line">## quorum：当这些quorum个数sentinel哨兵认为master主节点失联 那么这时 客观上认为主节点失联了  </span><br><span class="line"># sentinel monitor &lt;master-name&gt; &lt;ip&gt; &lt;redis-port&gt; &lt;quorum&gt;  </span><br><span class="line">sentinel monitor mymaster <span class="number">127</span>.<span class="number">0</span>.<span class="number">0</span>.<span class="number">1</span> <span class="number">6379</span> <span class="number">2</span></span><br><span class="line"># 指定主节点应答哨兵sentinel的最大时间间隔，超过这个时间，哨兵主观上认为主节点下线，默认<span class="number">30</span>秒  </span><br><span class="line"># sentinel auth-pass &lt;master-name&gt; &lt;password&gt;  </span><br><span class="line">sentinel down-after-milliseconds mymaster <span class="number">30000</span></span><br><span class="line">acllog-max-len <span class="number">128</span></span><br><span class="line"># 指定了在发生failover主备切换时，最多可以有多少个slave同时对新的master进行同步。这个数字越小，完成failover所需的时间就越长；反之，但是如果这个数字越大，就意味着越多的slave因为replication而不可用。可以通过将这个值设为<span class="number">1</span>，来保证每次只有一个slave，处于不能处理命令请求的状态。</span><br><span class="line"># sentinel parallel-syncs &lt;master-name&gt; &lt;numslaves&gt;</span><br><span class="line">sentinel parallel-syncs mymaster <span class="number">1</span></span><br><span class="line"># 故障转移的超时时间failover-timeout，默认三分钟，可以用在以下这些方面：</span><br><span class="line">## <span class="number">1</span>. 同一个sentinel对同一个master两次failover之间的间隔时间。  </span><br><span class="line">## <span class="number">2</span>. 当一个slave从一个错误的master那里同步数据时开始，直到slave被纠正为从正确的master那里同步数据时结束。  </span><br><span class="line">## <span class="number">3</span>. 当想要取消一个正在进行的failover时所需要的时间。</span><br><span class="line">## <span class="number">4</span>.当进行failover时，配置所有slaves指向新的master所需的最大时间。不过，即使过了这个超时，slaves依然会被正确配置为指向master，但是就不按parallel-syncs所配置的规则来同步数据了</span><br><span class="line"># sentinel failover-timeout &lt;master-name&gt; &lt;milliseconds&gt;  </span><br><span class="line">sentinel failover-timeout mymaster <span class="number">180000</span></span><br><span class="line">sentinel deny-scripts-reconfig yes</span><br><span class="line">SENTINEL resolve-hostnames no</span><br><span class="line">SENTINEL announce-hostnames no</span><br></pre></td></tr></table></figure>
+
+
+
+<p>重点参数</p>
+<ol>
+<li><p>bind</p>
+<p>服务监听地址，用于客户端连接，默认本机地址</p>
+</li>
+<li><p>daemonize</p>
+<p>是否以后台damon方式运行</p>
+</li>
+<li><p>protected-mode</p>
+<p>安全保护模式</p>
+</li>
+<li><p>port</p>
+<p>端口</p>
+</li>
+<li><p>logfile</p>
+<p>日志文件路径</p>
+</li>
+<li><p>pidfile</p>
+<p>pid文件路径</p>
+</li>
+<li><p>dir</p>
+<p>工作目录</p>
+</li>
+<li><p>sentinel monitor &lt;master-name&gt; &lt;ip&gt; &lt;redis-port&gt; &lt;quorum&gt;</p>
+<ol>
+<li>设置要监控的master服务器</li>
+<li>quorum表示最少有几个哨兵认可客观下线，同意故障迁移的法定票数。</li>
+</ol>
+</li>
+<li><p>sentinel auth-pass &lt;master-name&gt; &lt;password&gt;</p>
+<p>master设置了密码，连接master服务的密码</p>
+</li>
+<li><p>其他参数（默认就行）</p>
+<ol>
+<li><p>sentinel down-after-milliseconds &lt;master-name&gt; &lt;milliseconds&gt;：</p>
+<p>指定多少毫秒之后，主节点没有应答哨兵，此时哨兵主观上认为主节点下线</p>
+</li>
+<li><p>sentinel parallel-syncs &lt;master-name&gt; &lt;nums&gt;：</p>
+<p>表示允许并行同步的slave个数，当Master挂了后，哨兵会选出新的Master，此时，剩余的slave会向新的master发起同步数据</p>
+</li>
+<li><p>sentinel failover-timeout &lt;master-name&gt; &lt;milliseconds&gt;：</p>
+<p>故障转移的超时时间，进行故障转移时，如果超过设置的毫秒，表示故障转移失败</p>
+</li>
+<li><p>sentinel notification-script &lt;master-name&gt; &lt;script-path&gt; ：</p>
+<p>配置当某一事件发生时所需要执行的脚本</p>
+</li>
+<li><p>sentinel client-reconfig-script &lt;master-name&gt; &lt;script-path&gt;：</p>
+<p>客户端重新配置主节点参数脚本</p>
+</li>
+</ol>
+</li>
+</ol>
+<p>示例：</p>
+<p>三个哨兵实例需要三台虚拟机，考虑到机器性能有限，这里将三个哨兵实例配置到一台虚拟机上，配置三份不同的哨兵配置文件即可：sentinel26379.conf、sentinel26380.conf、sentinel26381.conf，将它们存放到&#x2F;myredis下。</p>
+<p>&#x2F;myredi目录下新建或者拷贝<code>sentinel.conf</code>文件，名字不能错，如果没有则新建文件</p>
+<p><code>sentinel.conf</code>文件</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line"># Example sentinel.conf</span><br><span class="line"></span><br><span class="line"># By default protected <span class="built_in">mode</span> is disabled <span class="keyword">in</span> sentinel <span class="built_in">mode</span>. Sentinel is reachable</span><br><span class="line"># from interfaces different than localhost. Make sure the sentinel instance is</span><br><span class="line"># protected from the outside world via firewalling or other means.</span><br><span class="line">protected-<span class="built_in">mode</span> no</span><br><span class="line"></span><br><span class="line"># port &lt;sentinel-port&gt;</span><br><span class="line"># The port that this sentinel instance will run on</span><br><span class="line">port <span class="number">26379</span></span><br><span class="line"></span><br><span class="line"># By default Redis Sentinel does <span class="keyword">not</span> run as a daemon. Use &#x27;yes&#x27; <span class="keyword">if</span> you need it.</span><br><span class="line"># Note that Redis will write a pid file <span class="keyword">in</span> /var/run/redis-sentinel.pid when</span><br><span class="line"># daemonized.</span><br><span class="line">daemonize no</span><br><span class="line"></span><br><span class="line"># When running daemonized, Redis Sentinel writes a pid file <span class="keyword">in</span></span><br><span class="line"># /var/run/redis-sentinel.pid by default. You can specify a custom pid file</span><br><span class="line"># location here.</span><br><span class="line">pidfile /var/run/redis-sentinel.pid</span><br><span class="line"></span><br><span class="line"># Specify the server verbosity level.</span><br><span class="line"># This can be one of:</span><br><span class="line"># debug (a lot of information, useful <span class="keyword">for</span> development/testing)</span><br><span class="line"># verbose (many rarely useful info, but <span class="keyword">not</span> a mess like the debug level)</span><br><span class="line"># notice (moderately verbose, what you want <span class="keyword">in</span> production probably)</span><br><span class="line"># warning (only very important / critical messages are logged)</span><br><span class="line"># nothing (nothing is logged)</span><br><span class="line">loglevel notice</span><br><span class="line"></span><br><span class="line"># Specify the log file name. Also the empty string can be used to force</span><br><span class="line"># Sentinel to log on the standard output. Note that <span class="keyword">if</span> you use standard</span><br><span class="line"># output <span class="keyword">for</span> logging but daemonize, logs will be sent to /dev/null</span><br><span class="line">logfile &quot;&quot;</span><br><span class="line"></span><br><span class="line"># To enable logging to the system logger, just <span class="built_in">set</span> &#x27;syslog-enabled&#x27; to yes,</span><br><span class="line"># and optionally update the other syslog parameters to suit your needs.</span><br><span class="line"># syslog-enabled no</span><br><span class="line"></span><br><span class="line"># Specify the syslog identity.</span><br><span class="line"># syslog-ident sentinel</span><br><span class="line"></span><br><span class="line"># Specify the syslog facility. Must be USER or between LOCAL0-LOCAL7.</span><br><span class="line"># syslog-facility local0</span><br><span class="line"></span><br><span class="line"># sentinel announce-ip &lt;ip&gt;</span><br><span class="line"># sentinel announce-port &lt;port&gt;</span><br><span class="line">#</span><br><span class="line"># The above two configuration directives are useful <span class="keyword">in</span> environments where,</span><br><span class="line"># because of NAT, Sentinel is reachable from outside via a non-local address.</span><br><span class="line">#</span><br><span class="line"># When announce-ip is provided, the Sentinel will claim the specified IP address</span><br><span class="line"># <span class="keyword">in</span> HELLO messages used to gossip its presence, instead of auto-detecting the</span><br><span class="line"># local address as it usually does.</span><br><span class="line">#</span><br><span class="line"># Similarly when announce-port is provided and is valid and non-zero, Sentinel</span><br><span class="line"># will announce the specified TCP port.</span><br><span class="line">#</span><br><span class="line"># The two options don&#x27;t need to be used together, <span class="keyword">if</span> only announce-ip is</span><br><span class="line"># provided, the Sentinel will announce the specified IP and the server port</span><br><span class="line"># as specified by the &quot;port&quot; option. <span class="keyword">If</span> only announce-port is provided, the</span><br><span class="line"># Sentinel will announce the auto-detected local IP and the specified port.</span><br><span class="line">#</span><br><span class="line"># Example:</span><br><span class="line">#</span><br><span class="line"># sentinel announce-ip <span class="number">1</span>.<span class="number">2</span>.<span class="number">3</span>.<span class="number">4</span></span><br><span class="line"></span><br><span class="line"># <span class="built_in">dir</span> &lt;working-directory&gt;</span><br><span class="line"># Every long running process should have a well-<span class="keyword">defined</span> working directory.</span><br><span class="line"># <span class="keyword">For</span> Redis Sentinel to <span class="built_in">chdir</span> to /tmp <span class="built_in">at</span> startup is the simplest thing</span><br><span class="line"># <span class="keyword">for</span> the process to don&#x27;t interfere with administrative tasks such as</span><br><span class="line"># unmounting filesystems.</span><br><span class="line"><span class="built_in">dir</span> /tmp</span><br><span class="line"></span><br><span class="line"># sentinel monitor &lt;master-name&gt; &lt;ip&gt; &lt;redis-port&gt; &lt;quorum&gt;</span><br><span class="line">#</span><br><span class="line"># Tells Sentinel to monitor this master, and to consider it <span class="keyword">in</span> O_DOWN</span><br><span class="line"># (Objectively Down) state only <span class="keyword">if</span> <span class="built_in">at</span> least &lt;quorum&gt; sentinels agree.</span><br><span class="line">#</span><br><span class="line"># Note that whatever is the ODOWN quorum, a Sentinel will require to</span><br><span class="line"># be elected by the majority of the known Sentinels <span class="keyword">in</span> order to</span><br><span class="line"># <span class="built_in">start</span> a failover, so no failover can be performed <span class="keyword">in</span> minority.</span><br><span class="line">#</span><br><span class="line"># Replicas are auto-discovered, so you don&#x27;t need to specify replicas <span class="keyword">in</span></span><br><span class="line"># any way. Sentinel itself will rewrite this configuration file adding</span><br><span class="line"># the replicas using additional configuration options.</span><br><span class="line"># Also note that the configuration file is rewritten when a</span><br><span class="line"># replica is promoted to master.</span><br><span class="line">#</span><br><span class="line"># Note: master name should <span class="keyword">not</span> include special characters or spaces.</span><br><span class="line"># The valid charset is A-z <span class="number">0</span>-<span class="number">9</span> and the three characters &quot;.-_&quot;.</span><br><span class="line">sentinel monitor mymaster <span class="number">127</span>.<span class="number">0</span>.<span class="number">0</span>.<span class="number">1</span> <span class="number">6379</span> <span class="number">2</span></span><br><span class="line"></span><br><span class="line"># sentinel auth-pass &lt;master-name&gt; &lt;password&gt;</span><br><span class="line">#</span><br><span class="line"># <span class="built_in">Set</span> the password to use to authenticate with the master and replicas.</span><br><span class="line"># Useful <span class="keyword">if</span> there is a password <span class="built_in">set</span> <span class="keyword">in</span> the Redis instances to monitor.</span><br><span class="line">#</span><br><span class="line"># Note that the master password is also used <span class="keyword">for</span> replicas, so it is <span class="keyword">not</span></span><br><span class="line"># possible to <span class="built_in">set</span> a different password <span class="keyword">in</span> masters and replicas instances</span><br><span class="line"># <span class="keyword">if</span> you want to be able to monitor these instances with Sentinel.</span><br><span class="line">#</span><br><span class="line"># However you can have Redis instances without the authentication enabled</span><br><span class="line"># mixed with Redis instances requiring the authentication (as long as the</span><br><span class="line"># password <span class="built_in">set</span> is the same <span class="keyword">for</span> all the instances requiring the password) as</span><br><span class="line"># the AUTH command will have no effect <span class="keyword">in</span> Redis instances with authentication</span><br><span class="line"># switched off.</span><br><span class="line">#</span><br><span class="line"># Example:</span><br><span class="line">#</span><br><span class="line"># sentinel auth-pass mymaster MySUPER--secret-<span class="number">0123</span>passw0rd</span><br><span class="line"></span><br><span class="line"># sentinel auth-user &lt;master-name&gt; &lt;username&gt;</span><br><span class="line">#</span><br><span class="line"># This is useful <span class="keyword">in</span> order to authenticate to instances having ACL capabilities,</span><br><span class="line"># that is, running Redis <span class="number">6</span>.<span class="number">0</span> or greater. When just auth-pass is provided the</span><br><span class="line"># Sentinel instance will authenticate to Redis using the old &quot;AUTH &lt;pass&gt;&quot;</span><br><span class="line"># method. When also an username is provided, it will use &quot;AUTH &lt;user&gt; &lt;pass&gt;&quot;.</span><br><span class="line"># <span class="keyword">In</span> the Redis servers side, the ACL to provide just minimal access to</span><br><span class="line"># Sentinel instances, should be configured along the following lines:</span><br><span class="line">#</span><br><span class="line">#     user sentinel-user &gt;somepassword +client +subscribe +publish \</span><br><span class="line">#                        +<span class="built_in">ping</span> +info +multi +slaveof +config +client +exec on</span><br><span class="line"></span><br><span class="line"># sentinel down-after-milliseconds &lt;master-name&gt; &lt;milliseconds&gt;</span><br><span class="line">#</span><br><span class="line"># Number of milliseconds the master (or any attached replica or sentinel) should</span><br><span class="line"># be unreachable (as <span class="keyword">in</span>, <span class="keyword">not</span> acceptable reply to <span class="built_in">PING</span>, continuously, <span class="keyword">for</span> the</span><br><span class="line"># specified period) <span class="keyword">in</span> order to consider it <span class="keyword">in</span> S_DOWN state (Subjectively</span><br><span class="line"># Down).</span><br><span class="line">#</span><br><span class="line"># Default is <span class="number">30</span> seconds.</span><br><span class="line">sentinel down-after-milliseconds mymaster <span class="number">30000</span></span><br><span class="line"></span><br><span class="line"># IMPORTANT NOTE: starting with Redis <span class="number">6</span>.<span class="number">2</span> ACL capability is supported <span class="keyword">for</span></span><br><span class="line"># Sentinel <span class="built_in">mode</span>, please refer to the Redis website https://redis.io/topics/acl</span><br><span class="line"># <span class="keyword">for</span> <span class="built_in">more</span> details.</span><br><span class="line"></span><br><span class="line"># Sentinel&#x27;s ACL users are <span class="keyword">defined</span> <span class="keyword">in</span> the following <span class="built_in">format</span>:</span><br><span class="line">#</span><br><span class="line">#   user &lt;username&gt; ... acl rules ...</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">For</span> example:</span><br><span class="line">#</span><br><span class="line">#   user worker +@admin +@connection ~* on &gt;ffa9203c493aa99</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">For</span> <span class="built_in">more</span> information about ACL configuration please refer to the Redis</span><br><span class="line"># website <span class="built_in">at</span> https://redis.io/topics/acl and redis server configuration </span><br><span class="line"># template redis.conf.</span><br><span class="line"></span><br><span class="line"># ACL LOG</span><br><span class="line">#</span><br><span class="line"># The ACL Log tracks failed commands and authentication events associated</span><br><span class="line"># with ACLs. The ACL Log is useful to troubleshoot failed commands blocked </span><br><span class="line"># by ACLs. The ACL Log is stored <span class="keyword">in</span> memory. You can reclaim memory with </span><br><span class="line"># ACL LOG RESET. Define the maximum entry length of the ACL Log below.</span><br><span class="line">acllog-max-len <span class="number">128</span></span><br><span class="line"></span><br><span class="line"># Using an external ACL file</span><br><span class="line">#</span><br><span class="line"># Instead of configuring users here <span class="keyword">in</span> this file, it is possible to use</span><br><span class="line"># a stand-alone file just listing users. The two methods cannot be mixed:</span><br><span class="line"># <span class="keyword">if</span> you configure users here and <span class="built_in">at</span> the same <span class="built_in">time</span> you activate the external</span><br><span class="line"># ACL file, the server will refuse to <span class="built_in">start</span>.</span><br><span class="line">#</span><br><span class="line"># The <span class="built_in">format</span> of the external ACL user file is exactly the same as the</span><br><span class="line"># <span class="built_in">format</span> that is used inside redis.conf to describe users.</span><br><span class="line">#</span><br><span class="line"># aclfile /etc/redis/sentinel-users.acl</span><br><span class="line"></span><br><span class="line"># requirepass &lt;password&gt;</span><br><span class="line">#</span><br><span class="line"># You can configure Sentinel itself to require a password, however when doing</span><br><span class="line"># so Sentinel will try to authenticate with the same password to all the</span><br><span class="line"># other Sentinels. So you need to configure all your Sentinels <span class="keyword">in</span> a given</span><br><span class="line"># group with the same &quot;requirepass&quot; password. Check the following documentation</span><br><span class="line"># <span class="keyword">for</span> <span class="built_in">more</span> info: https://redis.io/topics/sentinel</span><br><span class="line">#</span><br><span class="line"># IMPORTANT NOTE: starting with Redis <span class="number">6</span>.<span class="number">2</span> &quot;requirepass&quot; is a compatibility</span><br><span class="line"># layer on top of the ACL system. The option effect will be just setting</span><br><span class="line"># the password <span class="keyword">for</span> the default user. Clients will still authenticate using</span><br><span class="line"># AUTH &lt;password&gt; as usually, or <span class="built_in">more</span> explicitly with AUTH default &lt;password&gt;</span><br><span class="line"># <span class="keyword">if</span> they follow the new protocol: both will work.</span><br><span class="line">#</span><br><span class="line"># New config files are advised to use separate authentication control <span class="keyword">for</span></span><br><span class="line"># incoming connections (via ACL), and <span class="keyword">for</span> outgoing connections (via</span><br><span class="line"># sentinel-user and sentinel-pass) </span><br><span class="line">#</span><br><span class="line"># The requirepass is <span class="keyword">not</span> compatible with aclfile option and the ACL LOAD</span><br><span class="line"># command, these will cause requirepass to be ignored.</span><br><span class="line"></span><br><span class="line"># sentinel sentinel-user &lt;username&gt;</span><br><span class="line">#</span><br><span class="line"># You can configure Sentinel to authenticate with other Sentinels with specific</span><br><span class="line"># user name. </span><br><span class="line"></span><br><span class="line"># sentinel sentinel-pass &lt;password&gt;</span><br><span class="line">#</span><br><span class="line"># The password <span class="keyword">for</span> Sentinel to authenticate with other Sentinels. <span class="keyword">If</span> sentinel-user</span><br><span class="line"># is <span class="keyword">not</span> configured, Sentinel will use &#x27;default&#x27; user with sentinel-pass to authenticate.</span><br><span class="line"></span><br><span class="line"># sentinel parallel-syncs &lt;master-name&gt; &lt;numreplicas&gt;</span><br><span class="line">#</span><br><span class="line"># How many replicas we can reconfigure to point to the new replica simultaneously</span><br><span class="line"># during the failover. Use a low number <span class="keyword">if</span> you use the replicas to serve query</span><br><span class="line"># to avoid that all the replicas will be unreachable <span class="built_in">at</span> about the same</span><br><span class="line"># <span class="built_in">time</span> while performing the synchronization with the master.</span><br><span class="line">sentinel parallel-syncs mymaster <span class="number">1</span></span><br><span class="line"></span><br><span class="line"># sentinel failover-timeout &lt;master-name&gt; &lt;milliseconds&gt;</span><br><span class="line">#</span><br><span class="line"># Specifies the failover timeout <span class="keyword">in</span> milliseconds. It is used <span class="keyword">in</span> many ways:</span><br><span class="line">#</span><br><span class="line"># - The <span class="built_in">time</span> needed to re-<span class="built_in">start</span> a failover after a previous failover was</span><br><span class="line">#   already tried against the same master by a given Sentinel, is two</span><br><span class="line">#   times the failover timeout.</span><br><span class="line">#</span><br><span class="line"># - The <span class="built_in">time</span> needed <span class="keyword">for</span> a replica replicating to a wrong master according</span><br><span class="line">#   to a Sentinel current configuration, to be forced to replicate</span><br><span class="line">#   with the right master, is exactly the failover timeout (counting since</span><br><span class="line">#   the moment a Sentinel detected the misconfiguration).</span><br><span class="line">#</span><br><span class="line"># - The <span class="built_in">time</span> needed to cancel a failover that is already <span class="keyword">in</span> progress but</span><br><span class="line">#   did <span class="keyword">not</span> produced any configuration change (SLAVEOF NO ONE yet <span class="keyword">not</span></span><br><span class="line">#   acknowledged by the promoted replica).</span><br><span class="line">#</span><br><span class="line"># - The maximum <span class="built_in">time</span> a failover <span class="keyword">in</span> progress waits <span class="keyword">for</span> all the replicas to be</span><br><span class="line">#   reconfigured as replicas of the new master. However even after this <span class="built_in">time</span></span><br><span class="line">#   the replicas will be reconfigured by the Sentinels anyway, but <span class="keyword">not</span> with</span><br><span class="line">#   the exact parallel-syncs progression as specified.</span><br><span class="line">#</span><br><span class="line"># Default is <span class="number">3</span> minutes.</span><br><span class="line">sentinel failover-timeout mymaster <span class="number">180000</span></span><br><span class="line"></span><br><span class="line"># SCRIPTS EXECUTION</span><br><span class="line">#</span><br><span class="line"># sentinel notification-script and sentinel reconfig-script are used <span class="keyword">in</span> order</span><br><span class="line"># to configure scripts that are called to notify the system administrator</span><br><span class="line"># or to reconfigure clients after a failover. The scripts are executed</span><br><span class="line"># with the following rules <span class="keyword">for</span> error handling:</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">If</span> script exits with &quot;<span class="number">1</span>&quot; the execution is retried later (up to a maximum</span><br><span class="line"># number of times currently <span class="built_in">set</span> to <span class="number">10</span>).</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">If</span> script exits with &quot;<span class="number">2</span>&quot; (or an higher value) the script execution is</span><br><span class="line"># <span class="keyword">not</span> retried.</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">If</span> script terminates because it receives a signal the behavior is the same</span><br><span class="line"># as <span class="keyword">exit</span> code <span class="number">1</span>.</span><br><span class="line">#</span><br><span class="line"># A script has a maximum running <span class="built_in">time</span> of <span class="number">60</span> seconds. After this limit is</span><br><span class="line"># reached the script is terminated with a SIGKILL and the execution retried.</span><br><span class="line"></span><br><span class="line"># NOTIFICATION SCRIPT</span><br><span class="line">#</span><br><span class="line"># sentinel notification-script &lt;master-name&gt; &lt;script-<span class="built_in">path</span>&gt;</span><br><span class="line"># </span><br><span class="line"># <span class="keyword">Call</span> the specified notification script <span class="keyword">for</span> any sentinel event that is</span><br><span class="line"># generated <span class="keyword">in</span> the WARNING level (<span class="keyword">for</span> instance -sdown, -odown, and so forth).</span><br><span class="line"># This script should notify the system administrator via email, SMS, or any</span><br><span class="line"># other messaging system, that there is something wrong with the monitored</span><br><span class="line"># Redis systems.</span><br><span class="line">#</span><br><span class="line"># The script is called with just two arguments: the first is the event <span class="built_in">type</span></span><br><span class="line"># and the second the event description.</span><br><span class="line">#</span><br><span class="line"># The script must <span class="keyword">exist</span> and be executable <span class="keyword">in</span> order <span class="keyword">for</span> sentinel to <span class="built_in">start</span> <span class="keyword">if</span></span><br><span class="line"># this option is provided.</span><br><span class="line">#</span><br><span class="line"># Example:</span><br><span class="line">#</span><br><span class="line"># sentinel notification-script mymaster /var/redis/notify.sh</span><br><span class="line"></span><br><span class="line"># CLIENTS RECONFIGURATION SCRIPT</span><br><span class="line">#</span><br><span class="line"># sentinel client-reconfig-script &lt;master-name&gt; &lt;script-<span class="built_in">path</span>&gt;</span><br><span class="line">#</span><br><span class="line"># When the master changed because of a failover a script can be called <span class="keyword">in</span></span><br><span class="line"># order to perform application-specific tasks to notify the clients that the</span><br><span class="line"># configuration has changed and the master is <span class="built_in">at</span> a different address.</span><br><span class="line"># </span><br><span class="line"># The following arguments are passed to the script:</span><br><span class="line">#</span><br><span class="line"># &lt;master-name&gt; &lt;role&gt; &lt;state&gt; &lt;from-ip&gt; &lt;from-port&gt; &lt;to-ip&gt; &lt;to-port&gt;</span><br><span class="line">#</span><br><span class="line"># &lt;state&gt; is currently always &quot;<span class="built_in">start</span>&quot;</span><br><span class="line"># &lt;role&gt; is either &quot;leader&quot; or &quot;observer&quot;</span><br><span class="line"># </span><br><span class="line"># The arguments from-ip, from-port, to-ip, to-port are used to communicate</span><br><span class="line"># the old address of the master and the new address of the elected replica</span><br><span class="line"># (now a master).</span><br><span class="line">#</span><br><span class="line"># This script should be resistant to multiple invocations.</span><br><span class="line">#</span><br><span class="line"># Example:</span><br><span class="line">#</span><br><span class="line"># sentinel client-reconfig-script mymaster /var/redis/reconfig.sh</span><br><span class="line"></span><br><span class="line"># SECURITY</span><br><span class="line">#</span><br><span class="line"># By default SENTINEL <span class="built_in">SET</span> will <span class="keyword">not</span> be able to change the notification-script</span><br><span class="line"># and client-reconfig-script <span class="built_in">at</span> runtime. This avoids a trivial security issue</span><br><span class="line"># where clients can <span class="built_in">set</span> the script to anything and trigger a failover <span class="keyword">in</span> order</span><br><span class="line"># to get the program executed.</span><br><span class="line"></span><br><span class="line">sentinel deny-scripts-reconfig yes</span><br><span class="line"></span><br><span class="line"># REDIS COMMANDS RENAMING (DEPRECATED)</span><br><span class="line">#</span><br><span class="line"># WARNING: avoid using this option <span class="keyword">if</span> possible, instead use ACLs.</span><br><span class="line">#</span><br><span class="line"># Sometimes the Redis server has certain commands, that are needed <span class="keyword">for</span> Sentinel</span><br><span class="line"># to work correctly, renamed to unguessable strings. This is often the case</span><br><span class="line"># of CONFIG and SLAVEOF <span class="keyword">in</span> the context of providers that provide Redis as</span><br><span class="line"># a service, and don&#x27;t want the customers to reconfigure the instances outside</span><br><span class="line"># of the administration console.</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">In</span> such case it is possible to tell Sentinel to use different command names</span><br><span class="line"># instead of the normal ones. <span class="keyword">For</span> example <span class="keyword">if</span> the master &quot;mymaster&quot;, and the</span><br><span class="line"># associated replicas, have &quot;CONFIG&quot; all renamed to &quot;GUESSME&quot;, I could use:</span><br><span class="line">#</span><br><span class="line"># SENTINEL <span class="built_in">rename</span>-command mymaster CONFIG GUESSME</span><br><span class="line">#</span><br><span class="line"># After such configuration is <span class="built_in">set</span>, every <span class="built_in">time</span> Sentinel would use CONFIG it will</span><br><span class="line"># use GUESSME instead. Note that there is no actual need to respect the command</span><br><span class="line"># case, so writing &quot;config guessme&quot; is the same <span class="keyword">in</span> the example above.</span><br><span class="line">#</span><br><span class="line"># SENTINEL <span class="built_in">SET</span> can also be used <span class="keyword">in</span> order to perform this configuration <span class="built_in">at</span> runtime.</span><br><span class="line">#</span><br><span class="line"># <span class="keyword">In</span> order to <span class="built_in">set</span> a command back to its original name (undo the renaming), it</span><br><span class="line"># is possible to just <span class="built_in">rename</span> a command to itself:</span><br><span class="line">#</span><br><span class="line"># SENTINEL <span class="built_in">rename</span>-command mymaster CONFIG CONFIG</span><br><span class="line"></span><br><span class="line"># HOSTNAMES SUPPORT</span><br><span class="line">#</span><br><span class="line"># Normally Sentinel uses only IP addresses and requires SENTINEL MONITOR</span><br><span class="line"># to specify an IP address. Also, it requires the Redis replica-announce-ip</span><br><span class="line"># keyword to specify only IP addresses.</span><br><span class="line">#</span><br><span class="line"># You may enable hostnames support by enabling resolve-hostnames. Note</span><br><span class="line"># that you must make sure your DNS is configured properly and that DNS</span><br><span class="line"># resolution does <span class="keyword">not</span> introduce very long delays.</span><br><span class="line">#</span><br><span class="line">SENTINEL resolve-hostnames no</span><br><span class="line"></span><br><span class="line"># When resolve-hostnames is enabled, Sentinel still uses IP addresses</span><br><span class="line"># when exposing instances to users, configuration files, etc. <span class="keyword">If</span> you want</span><br><span class="line"># to retain the hostnames when announced, enable announce-hostnames below.</span><br><span class="line">#</span><br><span class="line">SENTINEL announce-hostnames no</span><br><span class="line"></span><br><span class="line"># When master_reboot_down_after_period is <span class="built_in">set</span> to <span class="number">0</span>, Sentinel does <span class="keyword">not</span> fail over</span><br><span class="line"># when receiving a -LOADING response from a master. This was the only supported</span><br><span class="line"># behavior before version <span class="number">7</span>.<span class="number">0</span>.</span><br><span class="line">#</span><br><span class="line"># Otherwise, Sentinel will use this value as the <span class="built_in">time</span> (<span class="keyword">in</span> ms) it is willing to</span><br><span class="line"># accept a -LOADING response after a master has been rebooted, before failing</span><br><span class="line"># over.</span><br><span class="line"></span><br><span class="line">SENTINEL master-reboot-down-after-period mymaster <span class="number">0</span></span><br></pre></td></tr></table></figure>
+
+<h3 id="配置sentinel"><a href="#配置sentinel" class="headerlink" title="配置sentinel"></a>配置sentinel</h3><p>在6379下的<code>/myredis</code>文件夹下创建sentinel26379.conf、sentinel26380.conf、sentinel26381.conf，并写入</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">bind <span class="number">0</span>.<span class="number">0</span>.<span class="number">0</span>.<span class="number">0</span></span><br><span class="line">daemonize yes</span><br><span class="line">protected-<span class="built_in">mode</span> no</span><br><span class="line">port <span class="number">26379</span></span><br><span class="line">logfile &quot;/myredis/sentinel26379.log&quot;</span><br><span class="line">pidfile /var/run/redis-sentinel26379.pid</span><br><span class="line"><span class="built_in">dir</span> /myredis</span><br><span class="line">sentinel monitor mymaster ip <span class="number">6379</span> <span class="number">2</span> # <span class="number">2</span>是票数</span><br><span class="line">sentinel auth-pass mymaster redis密码</span><br></pre></td></tr></table></figure>
+
+<p><code>sentinel26379.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419151445198.png" alt="image-20250419151445198"></p>
+<p><code>sentinel26380.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419151552672.png" alt="image-20250419151552672"></p>
+<p><code>sentinel26381.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419151707674.png" alt="image-20250419151707674"></p>
+<h3 id="配置主机6379的访问密码"><a href="#配置主机6379的访问密码" class="headerlink" title="配置主机6379的访问密码"></a>配置主机6379的访问密码</h3><p>因为我们的6380和6381都配置的主机的访问密码了，所以只配置6379的主机访问密码就可以！</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419152347804.png" alt="image-20250419152347804"></p>
+<blockquote>
+<p>注意：</p>
+<p>​	6379后续可能会变成从机，需要设置访问新主机的密码， 请设置masterauth项访问密码为redis，不然后续可能报错master_link_status:down</p>
+</blockquote>
+<p>启动6379、6380、6381服务</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419152810794.png" alt="image-20250419152810794"></p>
+<h3 id="启动sentinel"><a href="#启动sentinel" class="headerlink" title="启动sentinel"></a>启动sentinel</h3><p>通过<code>redis-sentinel sentinel文件 --sentinel</code>启动</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419153023197.png" alt="image-20250419153023197"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419153118226.png" alt="image-20250419153118226"></p>
+<p>当我们模拟主机挂了，看看从机是否会上位</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419155106107.png" alt="image-20250419155106107"></p>
+<p>稍等一下</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419155137363.png" alt="image-20250419155137363"></p>
+<p>主机挂了，从机会进行投票，选择一个进行上位</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419155242345.png" alt="image-20250419155242345"></p>
+<p>可以看到我们的6381已经上位了，当我们打开6379.log文件查看</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419155854459.png" alt="image-20250419155854459"></p>
+<p>我们的6379没启动，可以看出6379已经不是master变成slave了</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419160012203.png" alt="image-20250419160012203"></p>
+<p>可以看到可以正常访问数据</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419160112468.png" alt="image-20250419160112468"></p>
+<h3 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h3><blockquote>
+<ol>
+<li>文件的内容，在运行期间会被自动sentinel动态进行更改</li>
+<li>master-slave 切换后，master_redis.conf、slave_redis.conf和sentinel.conf的内容都会发生改变，即master_redis.conf 中会多一行slaveof的配置，sentinel.conf 的监控目标会随之调换</li>
+</ol>
+</blockquote>
+<p><img src="/hexo-docs/images/redisImages/image-20250419161603929.png" alt="image-20250419161603929"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419161744675.png" alt="image-20250419161744675"></p>
+<h2 id="运行流程和选举原理"><a href="#运行流程和选举原理" class="headerlink" title="运行流程和选举原理"></a>运行流程和选举原理</h2><p>当一个主从配置中的master失效之后，sentinel可以选举出一个新的master用于自动接替原master的工作，主从配置中的其他redis服务器自动指向新的master同步数据。一般建议sentinel采取奇数台，防止某一台sentinel无法连接到master导致误切换</p>
+<h3 id="运行流程，故障切换"><a href="#运行流程，故障切换" class="headerlink" title="运行流程，故障切换"></a>运行流程，故障切换</h3><h4 id="三个哨兵监控一主二从，正常运行中"><a href="#三个哨兵监控一主二从，正常运行中" class="headerlink" title="三个哨兵监控一主二从，正常运行中"></a>三个哨兵监控一主二从，正常运行中</h4><p><img src="/hexo-docs/images/redisImages/image-20250419170201516.png" alt="image-20250419170201516"></p>
+<h4 id="SDown主观下线（Subjectively-Down）"><a href="#SDown主观下线（Subjectively-Down）" class="headerlink" title="SDown主观下线（Subjectively Down）:"></a><code>SDown主观下线（Subjectively Down）</code>:</h4><p>SDown（主观不可用）是<strong>单个sentinel自己主观上</strong>检测到的关于master的状态，从sentinel的角度来看，如果发送了PING心跳后，在一定时间内没有收到合法的回复，就达到 SDOWN 的条件</p>
+<p>sentinel 配置文件中的 down-after-milisenconds 设置了判断主观下线的时间长度</p>
+<p>说明：</p>
+<p>所谓主观下线（Subjectively Down， 简称 SDOWN）指的是单个Sentinel实例对服务器做出的下线判断，即单个sentinel认为某个服务下线（有可能是接收不到订阅，之间的网络不通等等原因）。主观下线就是说如果服务器在[sentinel down-after-milliseconds]给定的毫秒数之内没有回应PING命令或者返回一个错误消息， 那么这个Sentinel会主观的(单方面的)认为这个master不可以用了，o(╥﹏╥)o</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419171025830.png" alt="image-20250419171025830"></p>
+<p>sentinel down-after-milliseconds &lt;masterName&gt; &lt;timeout&gt;</p>
+<p> 表示master被当前sentinel实例认定为失效的间隔时间，这个配置其实就是进行主观下线的一个依据</p>
+<p>master在多长时间内一直没有给Sentine返回有效信息，则认定该master主观下线。也就是说如果多久没联系上redis-servevr，认为这个redis-server进入到失效（SDOWN）状态。</p>
+<h4 id="ODown客观下线（Objectively-Down）"><a href="#ODown客观下线（Objectively-Down）" class="headerlink" title="ODown客观下线（Objectively Down）"></a>ODown客观下线（Objectively Down）</h4><p>ODOWN 需要一定数量的 sentinel，<strong>多个哨兵达成一致意见</strong>才能认为一个master客观上已经宕掉</p>
+<p>说明：</p>
+<p>四个参数含义：</p>
+<p>masterName是对某个master+slave组合的一个区分标识(一套sentinel可以监听多组master+slave这样的组合)</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419171311689.png" alt="image-20250419171311689"></p>
+<p><strong>quorum这个参数是进行客观下线的一个依据</strong>，法定人数&#x2F;法定票数</p>
+<p>意思是至少有quorum个sentinel认为这个master有故障才会对这个master进行下线以及故障转移。因为有的时候，某个sentinel节点可能因为自身网络原因导致无法连接master，而此时master并没有出现故障，所以这就需要多个sentinel都一致认为该master有问题，才可以进行下一步操作，这就保证了公平性和高可用。</p>
+<h4 id="选举出领导者哨兵（哨兵中选出兵王（leader））"><a href="#选举出领导者哨兵（哨兵中选出兵王（leader））" class="headerlink" title="选举出领导者哨兵（哨兵中选出兵王（leader））"></a>选举出领导者哨兵（哨兵中选出兵王（leader））</h4><p>当主节点被判断客观下线以后，各个哨兵节点会进行协商，先选举出一个<strong>领导者哨兵节点（兵王）</strong>并由该领导者节点，也即被选举出的兵王进行failover(故障迁移)</p>
+<p>哨兵领导者，兵王如何选举出来的？</p>
+<p>Raft算法</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250419171634394.png" alt="image-20250419171634394"></p>
+<p>监视该主节点的所有哨兵都有可能被选为领导者，选举使用的算法是Raft算法；Raft算法的基本思路<strong>是先到先得</strong>：</p>
+<p>即在一轮选举中，哨兵A向B发送成为领导者的申请，如果B没有同意过其他哨兵，则会同意A成为领导者</p>
+<h3 id="由兵王（leader）开始推动故障切换流程并选出一个新的master"><a href="#由兵王（leader）开始推动故障切换流程并选出一个新的master" class="headerlink" title="由兵王（leader）开始推动故障切换流程并选出一个新的master"></a>由兵王（leader）开始推动故障切换流程并选出一个新的master</h3><h4 id="3个步骤"><a href="#3个步骤" class="headerlink" title="3个步骤"></a>3个步骤</h4><ol>
+<li><p>选出新的主节点</p>
+<ol>
+<li><p>某个slave被选中成为新的master</p>
+</li>
+<li><p>选出新的master的规则，剩余slave节点健康前提下</p>
+<ol>
+<li><p><img src="/hexo-docs/images/redisImages/image-20250419171951635.png" alt="image-20250419171951635"></p>
+</li>
+<li><p>redis.conf文件中，优先级slave-priority或者 replica-priority 最高的从节点（数字越小优先级越高）</p>
+<ol>
+<li><img src="/hexo-docs/images/redisImages/image-20250419172102701.png" alt="image-20250419172102701"></li>
+</ol>
+</li>
+<li><p>复制偏移位置offset最大的从节点</p>
+</li>
+<li><p>最小Run ID 的从节点</p>
+<p>字典顺序，ASCII 码</p>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+<li><p>从机加入到主机上</p>
+<ol>
+<li>执行slaveof no one 命令让选出来的从节点成为新的主节点，并通过slaveof命令让其他节点成为从节点</li>
+<li>sentinel leader 会对选举出的新master执行slaveof no one操作，将其提升为master节点</li>
+<li>sentinel leader 向其他slave 发送命令，让剩余的slave成为新的master节点的slave</li>
+</ol>
+</li>
+<li><p>主机up上线会挂在已经上位的主机上</p>
+<ol>
+<li>将之前已下线的老master设置为新选出的新master的从节点，当老master重新上线后，它会成为新的master的从节点</li>
+<li>sentinel leader 会让原来的master降级为slave并恢复正常工作。</li>
+</ol>
+</li>
+</ol>
+<h3 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h3><p>上述的failover操作均由sentinel自己独自完成，无效人工干预。</p>
+<h3 id="使用建议"><a href="#使用建议" class="headerlink" title="使用建议"></a>使用建议</h3><ol>
+<li><p>哨兵节点的数量为多个，哨兵本身应该集群，保证高可用</p>
+</li>
+<li><p>哨兵节点的数量应该是奇数</p>
+</li>
+<li><p>如果哨兵节点部署在 Docker 等容器里面，尤其要注意端口的正确映射</p>
+</li>
+<li><p>哨兵集群+主从复制，并不保证数据零丢失</p>
+<p>承上启下引出集群</p>
+</li>
+</ol>
+<h2 id="集群（cluster）"><a href="#集群（cluster）" class="headerlink" title="集群（cluster）"></a>集群（cluster）</h2><p><strong>由于数据量过大</strong>，单个Master复制集难以承担，因此需要对多个复制集进行集群，形成水平扩展每个复制集只负责存储整个数据集的一部分，这就是Redis的集群，其作用是提供在多个Redis节点间共享数据的程序集。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420144656123.png" alt="image-20250420144656123"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420145102259.png" alt="image-20250420145102259"></p>
+<p>redis 集群是一个提供在多个redis节点间共享数据的程序集</p>
+<p><strong>redis集群可以支持多个master</strong></p>
+<p>能干嘛？</p>
+<ol>
+<li>redis 集群支持多个 master，每个master又可以挂在多个 slave <ol>
+<li>读写分离</li>
+<li>支持数据的高可用</li>
+<li>支持海量数据的读写存储操作</li>
+</ol>
+</li>
+<li>由于 cluster 自带 sentinel 的故障转移机制，内置了高可用的支持，<strong>无需再去使用哨兵功能</strong></li>
+<li>客户端与redis的节点连接，不再需要连接集群中所有的节点，只需要任意连接集群中的一个可用节点即可</li>
+<li><strong>槽位slot</strong>负责分配到各个物理服务节点，由对应的集群来负责维护节点、插槽和数据之间的关系</li>
+</ol>
+<h3 id="集群算法-分片-槽位slot"><a href="#集群算法-分片-槽位slot" class="headerlink" title="集群算法-分片-槽位slot"></a>集群算法-分片-槽位slot</h3><p>集群的秘钥空间被分成 16384个槽，有效地设置了 16384 个主节点的集群大小限（但是，建议的最大节点大小约1000个节点）。</p>
+<p>集群中的每个主节点处理16384个哈希槽的一个子集。当没有集群重新配置正在进行时（即哈希槽从一个节点移动到另一个节点），集群是稳定的。当集群稳定时，单个哈希槽将由单个节点提供服务（但是，服务节点可以有一个或多个副本），在网络分裂或故障的情况下替换它，并且可以用于扩展 读取陈旧数据是可接受的操作。</p>
+<h4 id="redis集群的槽位slot"><a href="#redis集群的槽位slot" class="headerlink" title="redis集群的槽位slot"></a>redis集群的槽位slot</h4><p><img src="/hexo-docs/images/redisImages/image-20250420150015063.png" alt="image-20250420150015063"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420150036286.png" alt="image-20250420150036286"></p>
+<h4 id="redis集群的分片"><a href="#redis集群的分片" class="headerlink" title="redis集群的分片"></a>redis集群的分片</h4><p>分片是什么？</p>
+<p>​	使用Redis集群时我们会将存储的数据分散到多台redis机器上，这称为分片。简言之，集群中的每个Redis实例都被认为是整个数据的一个分片。</p>
+<p>如何找到给定key的分片？</p>
+<p>​	为了找到给定key的分片，我们对key进行CRC16(key)算法处理并通过对总分片数量取模。然后，使用确定性哈希函数，这意味着给定的key将多次始终映射到同一个分片，我们可以推断将来读取特定key的位置。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420150133953.png" alt="image-20250420150133953"></p>
+<h4 id="redis集群的槽位和分片的优势"><a href="#redis集群的槽位和分片的优势" class="headerlink" title="redis集群的槽位和分片的优势"></a>redis集群的槽位和分片的优势</h4><p><strong>最大优势，方便扩缩容和数据分派查找</strong></p>
+<p>这种结构很容易添加或者删除节点，比如如果我想添加个节点D，我需要从节点 A,B,C中得到部分槽到 D上 。如果我想移除节点A，需要将 A 中的槽移到B和C节点上，然后将没有任何槽的A节点从集群中移除即可。由于从一个节点将哈希槽移动到另一个节点并不会停止服务，所以无论添加删除或者改变某个节点的哈希槽的数量都不会造成集群不可用的状态。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420150223731.png" alt="image-20250420150223731"></p>
+<h4 id="slot槽位映射，一般业界有3种解决方案"><a href="#slot槽位映射，一般业界有3种解决方案" class="headerlink" title="slot槽位映射，一般业界有3种解决方案"></a>slot槽位映射，一般业界有3种解决方案</h4><h5 id="哈希取余分区"><a href="#哈希取余分区" class="headerlink" title="哈希取余分区"></a>哈希取余分区</h5><p><img src="/hexo-docs/images/redisImages/image-20250420150634747.png" alt="image-20250420150634747"></p>
+<p>2亿条记录就是2亿个k,v，我们单机不行必须要分布式多机，假设有3台机器构成一个集群，用户每次读写操作都是根据公式：hash(key) % N个机器台数，计算出哈希值，用来决定数据映射到哪一个节点上。</p>
+<p><strong>优点：</strong></p>
+<p>​	简单粗暴，直接有效，只需要预估好数据规划好节点，例如3台、8台、10台，就能保证一段时间的数据支撑。使用Hash算法让固定的一部分请求落到同一台服务器上，这样每台服务器固定处理一部分请求（并维护这些请求的信息），起到负载均衡+分而治之的作用。</p>
+<p><strong>缺点：</strong></p>
+<p>原来规划好的节点，进行扩容或者缩容就比较麻烦了额，不管扩缩，每次数据变动导致节点有变动，映射关系需要重新进行计算，在服务器个数固定不变时没有问题，如果需要弹性扩容或故障停机的情况下，原来的取模公式就会发生变化：Hash(key)&#x2F;3会变成Hash(key) &#x2F;?。此时地址经过取余运算的结果将发生很大变化，根据公式获取的服务器也会变得不可控。</p>
+<p>某个redis机器宕机了，由于台数数量变化，会导致hash取余全部数据重新洗牌。</p>
+<h5 id="一致性哈希算法分区"><a href="#一致性哈希算法分区" class="headerlink" title="一致性哈希算法分区"></a>一致性哈希算法分区</h5><p>　一致性哈希算法在1997年由麻省理工学院中提出的，设计目标是为了解决分布式缓存数据变动和映射问题，某个机器宕机了，分母数量改变了，自然取余数不OK了。</p>
+<p>能干嘛？</p>
+<p>提出一致性Hash 解决方案。目的是当服务器个数发生变动时，尽量减少影响客户端到服务器的映射关系</p>
+<h6 id="三大步骤"><a href="#三大步骤" class="headerlink" title="三大步骤"></a>三大步骤</h6><ol>
+<li><p>算法构建一致性哈希环</p>
+<p> 一致性哈希算法必然有个hash函数并按照算法产生hash值，这个算法的所有可能哈希值会构成一个全量集，这个集合可以成为一个hash空间[0,2^32-1]，这个是一个线性空间，但是在算法中，我们通过适当的逻辑控制将它首尾相连(0 &#x3D; 2^32),这样让它逻辑上形成了一个环形空间。</p>
+<p>  它也是按照使用取模的方法，前面笔记介绍的节点取模法是对节点（服务器）的数量进行取模。而一致性Hash算法是对2^32取模，简单来说，一致性Hash算法将整个哈希值空间组织成一个虚拟的圆环，如假设某哈希函数H的值空间为0-2^32-1（即哈希值是一个32位无符号整形），整个哈希环如下图：整个空间按顺时针方向组织，圆环的正上方的点代表0，0点右侧的第一个点代表1，以此类推，2、3、4、……直到2^32-1，也就是说0点左侧的第一个点代表2^32-1， 0和2^32-1在零点中方向重合，我们把这个由2^32个点组成的圆环称为Hash环。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151020699.png" alt="image-20250420151020699"></p>
+</li>
+<li><p>redis服务器IP节点映射</p>
+<p>将集群中各个IP节点映射到环上的某一个位置。</p>
+<p>将各个服务器使用Hash进行一个哈希，具体可以选择服务器的IP或主机名作为关键字进行哈希，这样每台机器就能确定其在哈希环上的位置。假如4个节点NodeA、B、C、D，经过IP地址的哈希函数计算(hash(ip))，使用IP地址哈希后在环空间的位置如下： </p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151105848.png" alt="image-20250420151105848"></p>
+</li>
+<li><p>key落到服务器的落键规则</p>
+<p>当我们需要存储一个kv键值对时，首先计算key的hash值，hash(key)，将这个key使用相同的函数Hash计算出哈希值并确定此数据在环上的位置，<strong>从此位置沿环顺时针“行走”</strong>，第一台遇到的服务器就是其应该定位到的服务器，并将该键值对存储在该节点上。</p>
+<p>如我们有Object A、Object B、Object C、Object D四个数据对象，经过哈希计算后，在环空间上的位置如下：根据一致性Hash算法，数据A会被定为到Node A上，B被定为到Node B上，C被定为到Node C上，D被定为到Node D上。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151205941.png" alt="image-20250420151205941"></p>
+</li>
+</ol>
+<h6 id="优点"><a href="#优点" class="headerlink" title="优点"></a>优点</h6><ol>
+<li><p>一致性哈希算法的<strong>容错性</strong></p>
+<p>假设Node C宕机，可以看到此时对象A、B、D不会受到影响。一般的，在一致性Hash算法中，如果一台服务器不可用，则受影响的数据仅仅是此服务器到其环空间中前一台服务器（即沿着逆时针方向行走遇到的第一台服务器）之间数据，其它不会受到影响。简单说，就是C挂了，受到影响的只是B、C之间的数据且这些数据会转移到D进行存储。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151324945.png" alt="image-20250420151324945"></p>
+</li>
+<li><p>一致性哈希算法的<strong>扩展性</strong></p>
+<p>数据量增加了，需要增加一台节点NodeX，X的位置在A和B之间，那收到影响的也就是A到X之间的数据，重新把A到X的数据录入到X上即可，</p>
+<p>不会导致hash取余全部数据重新洗牌（数据丢失）。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151402839.png" alt="image-20250420151402839"></p>
+<h6 id="缺点"><a href="#缺点" class="headerlink" title="缺点"></a>缺点</h6><p>一致性哈希算法的<strong>数据倾斜</strong>问题</p>
+<p>一致性Hash算法在服务<strong>节点太少时</strong>，容易因为节点分布不均匀而造成<strong>数据倾斜</strong>（被缓存的对象大部分集中缓存在某一台服务器上）问题，</p>
+<p>例如系统中只有两台服务器：</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151446354.png" alt="image-20250420151446354"></p>
+<h6 id="总结-1"><a href="#总结-1" class="headerlink" title="总结"></a>总结</h6><p>为了在节点数目发生改变时尽可能少的迁移数据</p>
+<p>将所有的存储节点排列在收尾相接的Hash环上，每个key在计算Hash后会顺时针找到临近的存储节点存放。</p>
+<p>而当有节点加入或退出时仅影响该节点在Hash环上顺时针相邻的后续节点。 </p>
+<p>优点：</p>
+<p>​	加入和删除节点只影响哈希环中顺时针方向的相邻的节点，对其他节点无影响。</p>
+<p>缺点：</p>
+<p>​	数据的分布和节点的位置有关，因为这些节点不是均匀的分布在哈希环上的，所以数据在进行存储时达不到均匀分布的效果。</p>
+</li>
+</ol>
+<h5 id="哈希槽分区（HASH-SLOT-CRC16-key-mod-16384）"><a href="#哈希槽分区（HASH-SLOT-CRC16-key-mod-16384）" class="headerlink" title="哈希槽分区（HASH_SLOT&#x3D;CRC16(key) mod 16384）"></a>哈希槽分区（HASH_SLOT&#x3D;CRC16(key) mod 16384）</h5><ol>
+<li><p>为什么会出现？</p>
+<p>一致性哈希算法的数据倾斜问题</p>
+<p>哈希槽实质就是一个数组，数组[0,2^14 -1]形成hash slot空间。</p>
+</li>
+<li><p>能干什么</p>
+<p>解决均匀分配的问题，在数据和节点之间又加入了一层，把这层称为哈希槽（slot），用于管理数据和节点之间的关系，现在就相当于节点上放的是槽，槽里放的是数据。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420151718731.png" alt="image-20250420151718731"></p>
+<p>槽解决的是粒度问题，相当于把粒度变大了，这样便于数据移动。哈希解决的是映射问题，使用key的哈希值来计算所在的槽，便于数据分配</p>
+</li>
+<li><p>多少个hash槽</p>
+<p>一个集群只能有16384个槽，编号0-16383（0-2^14-1）。这些槽会分配给集群中的所有主节点，分配策略没有要求。</p>
+<p>集群会记录节点和槽的对应关系，解决了节点和槽的关系后，接下来就需要对key求哈希值，然后对16384取模，余数是几key就落入对应的槽里。HASH_SLOT &#x3D; CRC16(key) mod 16384。以槽为单位移动数据，因为槽的数目是固定的，处理起来比较容易，这样数据移动问题就解决了。</p>
+</li>
+</ol>
+<h6 id="哈希槽计算"><a href="#哈希槽计算" class="headerlink" title="哈希槽计算"></a>哈希槽计算</h6><p>Redis 集群中内置了 16384 个哈希槽，redis 会根据节点数量大致均等的将哈希槽映射到不同的节点。当需要在 Redis 集群中放置一个 key-value时，redis先对key使用crc16算法算出一个结果然后用结果对16384求余数[ CRC16(key) % 16384]，这样每个 key 都会对应一个编号在 0-16383 之间的哈希槽，也就是映射到某个节点上。如下代码，key之A 、B在Node2， key之C落在Node3上</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250420151847491.png" alt="image-20250420151847491"></p>
+<h6 id="为什么redis集群的最大槽数是16384个？"><a href="#为什么redis集群的最大槽数是16384个？" class="headerlink" title="为什么redis集群的最大槽数是16384个？"></a>为什么redis集群的最大槽数是16384个？</h6><p>Redis集群并没有使用一致性hash而是引入了哈希槽的概念。Redis 集群有16384个哈希槽，每个key通过CRC16校验后对16384取模来决定放置哪个槽，集群的每个节点负责一部分hash槽。但为什么哈希槽的数量是16384（2^14）个呢？</p>
+<p>CRC16算法产生的hash值有16bit，该算法可以产生2^16&#x3D;65536个值。换句话说值是分布在0~65535之间，有更大的65536不用为什么只用16384就够？作者在做mod运算的时候，为什么不mod65536，而选择mod16384？ HASH_SLOT &#x3D; CRC16(key) mod 65536为什么没启用</p>
+<ol>
+<li><p>如果槽位为65536，发送心跳信息的消息头达8k，发送的心跳包过于庞大。</p>
+<p>在消息头中最占空间的是myslots[CLUSTER_SLOTS&#x2F;8]。 当槽位为65536时，这块的大小是: 65536÷8÷1024&#x3D;8kb 在消息头中最占空间的是myslots[CLUSTER_SLOTS&#x2F;8]。 当槽位为16384时，这块的大小是: 16384÷8÷1024&#x3D;2kb 因为每秒钟，redis节点需要发送一定数量的ping消息作为心跳包，如果槽位为65536，这个ping消息的消息头太大了，浪费带宽。</p>
+</li>
+<li><p>redis的集群主节点数量基本不可能超过1000个。</p>
+<p>集群节点越多，心跳包的消息体内携带的数据越多。如果节点过1000个，也会导致网络拥堵。因此redis作者不建议redis cluster节点数量超过1000个。 那么，对于节点数在1000以内的redis cluster集群，16384个槽位够用了。没有必要拓展到65536个。</p>
+</li>
+<li><p>槽位越小，节点少的情况下，压缩比高，容易传输</p>
+<p>Redis主节点的配置信息中它所负责的哈希槽是通过一张bitmap的形式来保存的，在传输过程中会对bitmap进行压缩，但是如果bitmap的填充率slots &#x2F; N很高的话(N表示节点数)，bitmap的压缩率就很低。 如果节点数很少，而哈希槽数量很多的话，bitmap的压缩率就很低。</p>
+</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250420152134809.png" alt="image-20250420152134809"></p>
+<h6 id="结论-1"><a href="#结论-1" class="headerlink" title="结论"></a>结论</h6><p><img src="/hexo-docs/images/redisImages/image-20250420152156297.png" alt="image-20250420152156297"></p>
+<p>redis集群<strong>不保证强一致性</strong>，这意味着在特定的条件下，redis集群可能会丢掉一些被系统收到的写入请求命令</p>
+<h4 id="3主3从redis集群的配置"><a href="#3主3从redis集群的配置" class="headerlink" title="3主3从redis集群的配置"></a>3主3从redis集群的配置</h4><p>找3台真实的虚拟机，各自新建 <code>mkdir -p /myredis/cluster</code></p>
+<p>IP: 192.168.0.128+端口6381&#x2F;6382</p>
+<p>新建 <code>redisCluster6381.conf 和 redisCluster6382.conf</code></p>
+<p> vim &#x2F;myredis&#x2F;cluster&#x2F;redisCluster6381.conf</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">bind <span class="number">0</span>.<span class="number">0</span>.<span class="number">0</span>.<span class="number">0</span></span><br><span class="line">daemonize yes</span><br><span class="line">protected-<span class="built_in">mode</span> no</span><br><span class="line">port <span class="number">6381</span> # 端口</span><br><span class="line">logfile &quot;/myredis/cluster/cluster6381.log&quot;</span><br><span class="line">pidfile /myredis/cluster6381.pid</span><br><span class="line"><span class="built_in">dir</span> /myredis/cluster</span><br><span class="line">dbfilename dump6381.rdb</span><br><span class="line">appendonly yes</span><br><span class="line">appendfilename &quot;appendonly6381.aof&quot;</span><br><span class="line">requirepass redis # redis密码</span><br><span class="line">masterauth redis # 集群密码</span><br><span class="line"></span><br><span class="line">cluster-enabled yes</span><br><span class="line">cluster-config-file nodes-<span class="number">6381</span>.conf</span><br><span class="line">cluster-node-timeout <span class="number">5000</span></span><br></pre></td></tr></table></figure>
+
+<p><code>redisCluster6381.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420173301308.png" alt="image-20250420173301308"></p>
+<p><code>redisCluster6382.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420173442658.png" alt="image-20250420173442658"></p>
+<p>IP: 192.168.0.131+端口6383&#x2F;6384</p>
+<p>新建 <code>redisCluster6383.conf 和 redisCluster6384.conf</code>和 <code>mkdir -p /myredis/cluster</code>文件</p>
+<p> vim &#x2F;myredis&#x2F;cluster&#x2F;redisCluster6383.conf和 vim &#x2F;myredis&#x2F;cluster&#x2F;redisCluster6384.conf</p>
+<p><code>redisCluster6383.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420174046619.png" alt="image-20250420174046619"></p>
+<p><code>redisCluster6384.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420174254659.png" alt="image-20250420174254659"></p>
+<p>IP: 192.168.0.132+端口6385&#x2F;6386</p>
+<p>新建 <code>redisCluster6385.conf 和 redisCluster6386.conf</code>和 <code>mkdir -p /myredis/cluster</code>文件</p>
+<p> vim &#x2F;myredis&#x2F;cluster&#x2F;redisCluster6385.conf和 vim &#x2F;myredis&#x2F;cluster&#x2F;redisCluster6386.conf</p>
+<p><code>redisCluster6385.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420174650382.png" alt="image-20250420174650382"></p>
+<p><code>redisCluster6386.conf</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420174829002.png" alt="image-20250420174829002"></p>
+<p>启动redis实例：<code>redis-server /myredis/cluster/redisCluster6381.conf</code>~&#96;redis-server &#x2F;myredis&#x2F;cluster&#x2F;redisCluster6386.conf&#96;</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420175132094.png" alt="image-20250420175132094"></p>
+<p>…</p>
+<p>通过<code>redis-cli</code>命令为6台机器构建集群关系</p>
+<p>​	构建主从关系命令</p>
+<blockquote>
+<p>注意，注意，注意自己的真实IP地址 </p>
+</blockquote>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a redis --cluster create --cluster-replicas <span class="number">1</span> <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">128</span>:<span class="number">6381</span> <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">128</span>:<span class="number">6382</span> <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">131</span>:<span class="number">6383</span> <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">131</span>:<span class="number">6384</span> <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">132</span>:<span class="number">6385</span> <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">132</span>:<span class="number">6386</span></span><br><span class="line">#--cluster-replicas <span class="number">1</span> 表示为每个master创建一个slave节点 </span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250420180547496.png" alt="image-20250420180547496"></p>
+<p>需要关闭3台机器的防火墙，关闭临时防火墙<code>systemctl stop firewalld </code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420180818518.png" alt="image-20250420180818518"></p>
+<p>yes问是否3主3从？</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420181335750.png" alt="image-20250420181335750"></p>
+<p>以6381为切入点，<strong>查看并检验集群状态</strong></p>
+<p>查看节点状态</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420181609201.png" alt="image-20250420181609201"></p>
+<p>使用<code>cluster nodes</code>查看</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420181847937.png" alt="image-20250420181847937"></p>
+<p>查看单个集群配置<code>cluster info</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420182026748.png" alt="image-20250420182026748"></p>
+<ul>
+<li><p><code>cluster_state</code>：状态是<code>ok</code>节点是否能够接收查询。<code>fail</code>如果至少有一个未绑定的散列槽（没有关联的节点），处于错误状态（为其服务的节点被标记为 FAIL 标记），或者该节点无法到达大多数主节点。</p>
+</li>
+<li><p><code>cluster_slots_assigned</code>：与某个节点关联的槽数（不是未绑定的）。这个数字应该是16384，节点才能正常工作，这意味着每个散列槽应该映射到一个节点。</p>
+</li>
+<li><p><code>cluster_slots_ok</code>：映射到不处于<code>FAIL</code>或<code>PFAIL</code>处于状态的节点的散列槽的数量。</p>
+</li>
+<li><p><code>cluster_slots_pfail</code>：映射到处于<code>PFAIL</code>状态的节点的散列槽的数量。请注意，只要<code>PFAIL</code>状态不由<code>FAIL</code>故障检测算法提升，这些散列槽仍可正常工作。<code>PFAIL</code>仅意味着我们目前无法与节点通话，但可能只是一个暂时的错误。</p>
+</li>
+<li><p><code>cluster_slots_fail</code>：映射到处于<code>FAIL</code>状态的节点的散列槽的数量。如果此数字不为零，则该节点无法提供查询，除非在配置中<code>cluster-require-full-coverage</code>设置为<code>no</code>。</p>
+</li>
+<li><p><code>cluster_known_nodes</code>：群集中已知节点的总数，包括<code>HANDSHAKE</code>当前可能不是群集适当成员的状态节点。</p>
+</li>
+<li><p><code>cluster_size</code>：服务群集中至少一个散列槽的主节点的数量。</p>
+</li>
+<li><p><code>cluster_current_epoch</code>：局部<code>Current Epoch</code>变量。这用于在故障转移期间创建独特的增加版本号。</p>
+</li>
+<li><p><code>cluster_my_epoch</code>：我们正在与之交谈的<code>Config Epoch</code>节点。这是分配给此节点的当前配置版本。</p>
+</li>
+<li><p><code>cluster_stats_messages_sent</code>：通过集群节点到节点二进制总线发送的消息数量。</p>
+</li>
+<li><p><code>cluster_stats_messages_received</code>：通过集群节点到节点二进制总线接收的消息数量。</p>
+</li>
+</ul>
+<h4 id="3主3从redis集群读写"><a href="#3主3从redis集群读写" class="headerlink" title="3主3从redis集群读写"></a>3主3从redis集群读写</h4><ol>
+<li><p>对6381新增两个key，看看效果如何</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420183826495.png" alt="image-20250420183826495"></p>
+</li>
+<li><p>为什么报错</p>
+<p>一定注意槽位的范围区间，需要路由到位</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420183854983.png" alt="image-20250420183854983"></p>
+</li>
+<li><p>如何解决</p>
+<p>防止失效加参数-c并新增两个key</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420184110078.png" alt="image-20250420184110078"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420184234189.png" alt="image-20250420184234189"></p>
+<p>可以看到k1重定向到我们的6385号机器了</p>
+</li>
+<li><p>如何查看集群信息</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420184408490.png" alt="image-20250420184408490"></p>
+</li>
+<li><p>查看某个key该属于对应的槽位值，<code>cluster keyslot</code>键名称</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420184533589.png" alt="image-20250420184533589"></p>
+<blockquote>
+<p>注意：</p>
+<p>如果重定向到某一台机器，只能在某一台机器查看，不能在当前机器查看，因为没有数据</p>
+</blockquote>
+</li>
+</ol>
+<h4 id="主从切换容错切换"><a href="#主从切换容错切换" class="headerlink" title="主从切换容错切换"></a>主从切换容错切换</h4><ol>
+<li><p>容错切换迁移</p>
+<ol>
+<li><p>主6381和从机切换，先停止主机6381</p>
+<ol>
+<li>6381主机停了，对应的真实从机上位</li>
+<li>6381作为1号主机分配的从机以实际情况为准，具体几号就是几号（这里是6384）</li>
+</ol>
+</li>
+<li><p>再次查看集群信息，本次6381主6384从</p>
+<ol>
+<li><p>发现6384，已经成功上位变成主机了！</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420191315525.png" alt="image-20250420191315525"></p>
+</li>
+</ol>
+</li>
+<li><p>随后，6381原来的主机回来了，是否会上位！</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420191703559.png" alt="image-20250420191703559"></p>
+</li>
+</ol>
+</li>
+<li><p>集群不保证数据一致性100%OK，一定会有数据丢失清空</p>
+<p>redis集群不保证强一致性，这意味着在特定的条件下，redis集群可能会丢掉一些被系统收到的写入请求命令</p>
+</li>
+<li><p>手动故障转移 or 节点从属调整该如何处理</p>
+<p>使用：<code>cluster failover</code>可以从从节点变成主节点。</p>
+<p>当前我们的6381是从节点，我们要把他变成主节点</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420192123271.png" alt="image-20250420192123271"></p>
+</li>
+</ol>
+<h4 id="主从扩容案例"><a href="#主从扩容案例" class="headerlink" title="主从扩容案例"></a>主从扩容案例</h4><p>当我们的3主3从不够用了，我们就应该扩容</p>
+<ol>
+<li><p>在IP<code>192.168.0.132</code>新建6381、6388两个服务实例配置文件+新建后启动</p>
+<ol>
+<li><p><code>vim /myredis/cluster/redisCluster6387.conf</code>和<code>vim /myredis/cluster/redisCluster6388.conf</code></p>
+</li>
+<li><p>6387</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420193527904.png" alt="image-20250420193527904"></p>
+</li>
+<li><p>6388</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420193628392.png" alt="image-20250420193628392"></p>
+</li>
+</ol>
+</li>
+<li><p>启动6387和6388</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420193737073.png" alt="image-20250420193737073"></p>
+</li>
+<li><p>将新增的6387节点（空槽号）作为master节点加入原集群</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a 密码 --cluster add-node 自己实际IP地址:<span class="number">6387</span> 自己实际IP地址:<span class="number">6381</span></span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250420194839662.png" alt="image-20250420194839662"></p>
+</li>
+<li><p>检查集群情况</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a 密码 --cluster check 真实ip地址:<span class="number">6381</span></span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250420195057422.png" alt="image-20250420195057422"></p>
+</li>
+<li><p>重新分派槽号（reshard）</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a 密码 --cluster reshard IP地址:端口号</span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250420195602536.png" alt="image-20250420195602536"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420195655887.png" alt="image-20250420195655887"></p>
+</li>
+<li><p>再次检查集群情况</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420195852698.png" alt="image-20250420195852698"></p>
+<p>可以看到，在3个主节点上匀了点给第四个主节点了！</p>
+</li>
+<li><p>为主节点6387分配从节点6388</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a 密码 --cluster add-node ip:新slave端口 ip:新master端口 --cluster-slave --cluster-master-id 新主机节点ID</span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250420200323623.png" alt="image-20250420200323623"></p>
+<p>再次检查分配情况</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250420200446706.png" alt="image-20250420200446706"></p>
+<h4 id="主从缩容案例"><a href="#主从缩容案例" class="headerlink" title="主从缩容案例"></a>主从缩容案例</h4><p>目的：让6387和6388下线</p>
+</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250421191204199.png" alt="image-20250421191204199"></p>
+<p>从集群中将4号从节点6388删除</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a 密码 --cluster <span class="built_in">del</span>-node ip:从机端口 从机<span class="number">6388</span>节点ID</span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250421191458702.png" alt="image-20250421191458702"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250421191556431.png" alt="image-20250421191556431"></p>
+<p>将6387的槽号清空，重新分配，本案例将清出来的槽号都给6381</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a redis --cluster reshard <span class="number">192</span>.<span class="number">168</span>.<span class="number">0</span>.<span class="number">128</span>:<span class="number">6381</span></span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250421192052683.png" alt="image-20250421192052683"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250421192137130.png" alt="image-20250421192137130"></p>
+<p>删除6387节点</p>
+<figure class="highlight cmd"><table><tr><td class="code"><pre><span class="line">redis-cli -a 密码 --cluster <span class="built_in">del</span>-node ip:端口 <span class="number">6387</span>节点ID</span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250421192332588.png" alt="image-20250421192332588"></p>
+<p>移除成功，再次检查节点</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250421192424669.png" alt="image-20250421192424669"></p>
+<h3 id="集群常用操作命令和CRC16算法分析"><a href="#集群常用操作命令和CRC16算法分析" class="headerlink" title="集群常用操作命令和CRC16算法分析"></a>集群常用操作命令和CRC16算法分析</h3><ol>
+<li><p>不在同一个slot槽位下的多键操作支持不好，通识占位符登场</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250421192540391.png" alt="image-20250421192540391"></p>
+<table>
+<thead>
+<tr>
+<th>不在同一个slot槽位下的键值无法使用mset、mget等多键操作</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>可以通过{}来定义同一个组的概念，使key中{}内相同内容的键值对放到一个slot槽位去，对照下图类似k1k2k3都映射为x，自然槽位一样</td>
+</tr>
+</tbody></table>
+<p><img src="/hexo-docs/images/redisImages/image-20250421192558156.png" alt="image-20250421192558156"></p>
+</li>
+<li><p>redis集群有16384个哈希槽，每个key通过CRC16校验后对16384取模来决定放置那个槽。集群的每个节点负责一部分hash槽</p>
+<p>CRC16源码</p>
+<p>​	cluster.c</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250421192803758.png" alt="image-20250421192803758"></p>
+</li>
+<li><p>常用命令</p>
+<ol>
+<li><p>集群是否完整才能对外提供服务</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250421192846552.png" alt="image-20250421192846552"></p>
+<table>
+<thead>
+<tr>
+<th>默认YES，现在集群架构是3主3从的redis cluster由3个master平分16384个slot，每个master的小集群负责1&#x2F;3的slot，对应一部分数据。cluster-require-full-coverage： 默认值 yes , 即需要集群完整性，方可对外提供服务 通常情况，如果这3个小集群中，任何一个（1主1从）挂了，你这个集群对外可提供的数据只有2&#x2F;3了， 整个集群是不完整的， redis 默认在这种情况下，是不会对外提供服务的。</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>如果你的诉求是，集群不完整的话也需要对外提供服务，需要将该参数设置为no ，这样的话你挂了的那个小集群是不行了，但是其他的小集群仍然可以对外提供服务。</td>
+</tr>
+</tbody></table>
+</li>
+<li><p><code>cluster countkeysinslot</code>槽位数字编号</p>
+<ol>
+<li>1，该槽位被占用</li>
+<li>0，该槽位没占用</li>
+</ol>
+</li>
+<li><p><code>cluster keyslot</code>键名称</p>
+<p>该键应该存在哪个槽位上</p>
+</li>
+</ol>
+</li>
+</ol>
+<h2 id="SpringBoot集成Redis"><a href="#SpringBoot集成Redis" class="headerlink" title="SpringBoot集成Redis"></a>SpringBoot集成Redis</h2><h3 id="Jedis"><a href="#Jedis" class="headerlink" title="Jedis"></a>Jedis</h3><p><strong>Jedis 是一款老牌 Redis 的 Java 客户端。</strong></p>
+<p>Jedis Client 是 Redis 官网推荐的一个面向java 客户端，库文件实现了对各类API 进行封装调用</p>
+<p>优点：</p>
+<ol>
+<li>Jedis 的 API 提供了比较全面的 Redis 命令的支持</li>
+<li>Jedis 中的 Java 方法基本和 Redis 的 API 保持着一致，也就是说了解 Redis 的API，可以熟练的使用 Jedis</li>
+<li>支持 pipelining、事务、LUA Scripting、Redis Sentinel、Redis Cluster等等 redis 提供的高级特性</li>
+<li>客户端轻量，简洁，便于集成和改造</li>
+<li>使用广泛，开发人员易上手</li>
+</ol>
+<p>缺点：</p>
+<ol>
+<li><p>使用阻塞的 I&#x2F;O 操作，且其方法调用都是同步的，程序流需要等到 sockets 处理完 I&#x2F;O 才能执行，不支持异步</p>
+</li>
+<li><p>Jedis 在实现上是直接连接的 redis server，如果在多线程环境下是非线程安全的，这个时候可以使用连接池来管理 Jedis，解决 Jedis 客户端实例存在非线程安全的问题（也就是可以通过配置JedisPool来实现基于Jedis的连接池）</p>
+</li>
+<li><p>不支持读写分离，需要自己实现</p>
+</li>
+<li><p>技术文档差，可以说几乎没有</p>
+</li>
+</ol>
+<p>通过配置 JedisPool 设置连接池并将JedisPool对象注入到spring容器内，使用时通过 @Autowired 方式注入JedisPool 使用。</p>
+<p>示例：</p>
+<p>​	pom文件</p>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="comment">&lt;!--jedis--&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>redis.clients<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>jedis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>4.3.1<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- lombok 因为要用到 @Slf4j--&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.projectlombok<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>lombok<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.redis;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> redis.clients.jedis.Jedis;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.HashMap;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.Set;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">JedisDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="type">Jedis</span> <span class="variable">jedis</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Jedis</span>(<span class="string">&quot;192.168.0.128&quot;</span>, <span class="number">6379</span>);</span><br><span class="line">        jedis.auth(<span class="string">&quot;redis&quot;</span>);</span><br><span class="line">        log.info(<span class="string">&quot;redis 连接成功&quot;</span>);</span><br><span class="line">        log.info(<span class="string">&quot;ping,&#123;&#125;&quot;</span>, jedis.ping());</span><br><span class="line">        <span class="comment">//string</span></span><br><span class="line">        log.info(<span class="string">&quot;-------string---------&quot;</span>);</span><br><span class="line">        jedis.set(<span class="string">&quot;k1&quot;</span>, <span class="string">&quot;v1&quot;</span>);</span><br><span class="line">        System.out.println(jedis.get(<span class="string">&quot;k1&quot;</span>));</span><br><span class="line">        <span class="comment">//list</span></span><br><span class="line">        log.info(<span class="string">&quot;-------list---------&quot;</span>);</span><br><span class="line">        jedis.lpush(<span class="string">&quot;list&quot;</span>, <span class="string">&quot;3&quot;</span>, <span class="string">&quot;2&quot;</span>, <span class="string">&quot;3&quot;</span>, <span class="string">&quot;4&quot;</span>, <span class="string">&quot;5&quot;</span>);</span><br><span class="line">        List&lt;String&gt; list = jedis.lrange(<span class="string">&quot;list&quot;</span>, <span class="number">0</span>, -<span class="number">1</span>);</span><br><span class="line">        list.forEach(System.out::println);</span><br><span class="line">        <span class="comment">//set</span></span><br><span class="line">        log.info(<span class="string">&quot;----------set----------&quot;</span>);</span><br><span class="line">        jedis.sadd(<span class="string">&quot;orders&quot;</span>, <span class="string">&quot;1&quot;</span>);</span><br><span class="line">        jedis.sadd(<span class="string">&quot;orders&quot;</span>, <span class="string">&quot;2&quot;</span>);</span><br><span class="line">        jedis.sadd(<span class="string">&quot;orders&quot;</span>, <span class="string">&quot;3&quot;</span>);</span><br><span class="line">        Set&lt;String&gt; orders = jedis.smembers(<span class="string">&quot;orders&quot;</span>);</span><br><span class="line">        orders.forEach(System.out::println);</span><br><span class="line">        jedis.srem(<span class="string">&quot;orders&quot;</span>, <span class="string">&quot;1&quot;</span>);</span><br><span class="line">        <span class="comment">//打印orders</span></span><br><span class="line">        log.info(<span class="string">&quot;orders,size：&#123;&#125;&quot;</span>, jedis.smembers(<span class="string">&quot;orders&quot;</span>).size());</span><br><span class="line">        <span class="comment">//hash</span></span><br><span class="line">        log.info(<span class="string">&quot;----------hash----------&quot;</span>);</span><br><span class="line">        jedis.hset(<span class="string">&quot;hash1&quot;</span>, <span class="string">&quot;userName&quot;</span>, <span class="string">&quot;zs&quot;</span>);</span><br><span class="line">        log.info(<span class="string">&quot;hash：&#123;&#125;&quot;</span>, jedis.hget(<span class="string">&quot;hash1&quot;</span>, <span class="string">&quot;userName&quot;</span>));</span><br><span class="line">        HashMap&lt;String, String&gt; hash2 = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span><br><span class="line">        hash2.put(<span class="string">&quot;userName&quot;</span>, <span class="string">&quot;zs&quot;</span>);</span><br><span class="line">        hash2.put(<span class="string">&quot;age&quot;</span>, <span class="string">&quot;20&quot;</span>);</span><br><span class="line">        hash2.put(<span class="string">&quot;email&quot;</span>, <span class="string">&quot;@qq.com&quot;</span>);</span><br><span class="line">        jedis.hmset(<span class="string">&quot;hash2&quot;</span>, hash2);</span><br><span class="line">        <span class="comment">//打印 hash2的值</span></span><br><span class="line">        log.info(<span class="string">&quot;-----hash2-----&quot;</span>);</span><br><span class="line">        List&lt;String&gt; hmget = jedis.hmget(<span class="string">&quot;hash2&quot;</span>, <span class="string">&quot;userName&quot;</span>, <span class="string">&quot;age&quot;</span>, <span class="string">&quot;email&quot;</span>);</span><br><span class="line">        hmget.forEach(System.out::println);</span><br><span class="line">        log.info(<span class="string">&quot;-----zset-----&quot;</span>);</span><br><span class="line">        <span class="comment">//zset</span></span><br><span class="line">        jedis.zadd(<span class="string">&quot;zset01&quot;</span>, <span class="number">50d</span>, <span class="string">&quot;70&quot;</span>);</span><br><span class="line">        jedis.zadd(<span class="string">&quot;zset01&quot;</span>, <span class="number">60d</span>, <span class="string">&quot;90&quot;</span>);</span><br><span class="line">        jedis.zadd(<span class="string">&quot;zset01&quot;</span>, <span class="number">70d</span>, <span class="string">&quot;70&quot;</span>);</span><br><span class="line">        List&lt;String&gt; zset01 = jedis.zrange(<span class="string">&quot;zset01&quot;</span>, <span class="number">0</span>, -<span class="number">1</span>);</span><br><span class="line">        zset01.forEach(System.out::println);</span><br><span class="line">        jedis.flushDB();</span><br><span class="line">        <span class="comment">//关闭连接</span></span><br><span class="line">        jedis.close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="Lettuce"><a href="#Lettuce" class="headerlink" title="Lettuce"></a>Lettuce</h3><p>Lettuce是一个Redis的Java驱动包，Lettuce翻译为生菜，没错，就是吃的那种生菜，所以它的Logo长这样</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250422171001852.png" alt="image-20250422171001852"></p>
+<p><strong>Lettuce 是一种可扩展的、线程安全的 Redis 高级客户端，从 Spring Boot 2.x 开始， Lettuce 已取代 Jedis 成为SpringBoot 默认的 Redis 客户端</strong><br>优点：</p>
+<ol>
+<li>相比于 Jedis，Lettuce 属于后起之秀，对 Redis 支持更加全面，并且解决了 Jedis 客户端实例存在非线程安全的问题</li>
+<li>支持同步编程，异步编程，响应式编程，自动重新连接，主从模式，集群模块，哨兵模式，管道和编码器等等高级的 Redis 特性</li>
+<li>Lettuce 底层基于 Netty 框架的事件驱动与 redis 通信，采用了非阻塞的 I&#x2F;O 操作，可异步调用，相比 Jedis，性能高</li>
+<li>Letuce 的 API 是线程安全的，如果不是执行阻塞和事务操作，如 BLPOP 和MULTI&#x2F;EXEC 等命令，多个线程就可以共享一个连接，性能方面差异很小</li>
+</ol>
+<p>缺点：</p>
+<ol>
+<li>API 更加抽象，学习使用成本高</li>
+</ol>
+<p>RedisTemplate是Spring Data Redis框架提供的对Jedis和Lettuce的封装客户端，本质上还是使用Jedis或Lettuce，spring boot1.x的版本默认采用Jedis实现，spring boot2.x的版本默认采用Lettuce实现；可以方便的在Jedis和Lettuce之间切换具体的客户端实现；和日志门面与日志实现框架的关系一样，日志门面统一了操作日志的api，而具体日志的记录交给日志实现框去做，这样在切换日志实现时不用修改日志相关代码；RedisTemplate性能上不及Jedis，使用RedisTemplate时项目中至少需要有Jedis或Lettuce客户端之一的依赖包，否则会报错，RedisTemplate会自动根据项目中依赖的客户端选择底层使用Jedis还是Lettuce。</p>
+<p><strong>Jedis和Lettuce的区别</strong></p>
+<p>jedis和Lettuce都是Redis的客户端，它们都可以连接Redis服务器，但是在SpringBoot2.0之后默认都是使用的 Lettuce 这个客户端连接Redis服务器，因为当时使用Jedis客户端连接Redis 服务器的时候，每个线程都要拿自己创建的Jedis实例去连接Redis客户端，当有很多个线程的时候，不仅开销大需要反复的创建关闭一个Jedis连接，而且也是线程不安全的，一个线程通过Jedis实例更改Redis服务器中的数据之后会影响另一个线程。</p>
+<p>但是如果使用 Lettuce 这个客户端连接 Redis 服务器的时候，就不会出现上面的情况，Lettuce 底层使用的是 Netty，当有多个线程都需要连接 Redis 服务器的时候，可以保证只创建一个 Lettuce 连接，使所有的线程共享这一个 Lettuce 连接，这样可以减少创建关闭一个 Lettuce 连接时候的开销；而且这种方式也是线程安全的，不会出现一个线程通过 Lettuce 更改 Redis 服务器中的数据之后而影响另一个线程的情况；</p>
+<p>使用：</p>
+<p>pom</p>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>io.lettuce<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>lettuce-core<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>6.2.1.RELEASE<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.redis;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> io.lettuce.core.RedisClient;</span><br><span class="line"><span class="keyword">import</span> io.lettuce.core.RedisURI;</span><br><span class="line"><span class="keyword">import</span> io.lettuce.core.SortArgs;</span><br><span class="line"><span class="keyword">import</span> io.lettuce.core.api.StatefulRedisConnection;</span><br><span class="line"><span class="keyword">import</span> io.lettuce.core.api.sync.RedisCommands;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.HashMap;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.Map;</span><br><span class="line"><span class="keyword">import</span> java.util.Set;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">LettuceDemo</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span> &#123;</span><br><span class="line">        <span class="comment">//使用构建器链式编程 构建 RedisURI.builder</span></span><br><span class="line">        <span class="type">RedisURI</span> <span class="variable">uri</span> <span class="operator">=</span> RedisURI.Builder</span><br><span class="line">                .redis(<span class="string">&quot;192.168.0.128&quot;</span>)</span><br><span class="line">                .withPort(<span class="number">6379</span>)</span><br><span class="line">                .withAuthentication(<span class="string">&quot;default&quot;</span>, <span class="string">&quot;redis&quot;</span>)</span><br><span class="line">                .build();</span><br><span class="line">        <span class="comment">//创建连接 redis 客户端</span></span><br><span class="line">        <span class="type">RedisClient</span> <span class="variable">redisClient</span> <span class="operator">=</span> RedisClient.create(uri);</span><br><span class="line">        <span class="comment">//创建连接</span></span><br><span class="line">        StatefulRedisConnection&lt;String, String&gt; connect = redisClient.connect();</span><br><span class="line">        <span class="comment">//创建redis同步操作命令</span></span><br><span class="line">        RedisCommands&lt;String, String&gt; commands = connect.sync();</span><br><span class="line">        <span class="comment">//string</span></span><br><span class="line">        log.info(<span class="string">&quot;=======string======&quot;</span>);</span><br><span class="line">        commands.set(<span class="string">&quot;k1&quot;</span>,<span class="string">&quot;v1&quot;</span>);</span><br><span class="line">        log.info(<span class="string">&quot;string：&#123;&#125;&quot;</span>,commands.get(<span class="string">&quot;k1&quot;</span>));</span><br><span class="line">        <span class="comment">//list</span></span><br><span class="line">        log.info(<span class="string">&quot;========list=========&quot;</span>);</span><br><span class="line">        commands.lpush(<span class="string">&quot;list&quot;</span>,<span class="string">&quot;1&quot;</span>,<span class="string">&quot;2&quot;</span>,<span class="string">&quot;3&quot;</span>,<span class="string">&quot;4&quot;</span>,<span class="string">&quot;5&quot;</span>);</span><br><span class="line">        List&lt;String&gt; list = commands.lrange(<span class="string">&quot;list&quot;</span>, <span class="number">0</span>, -<span class="number">1</span>);</span><br><span class="line">        list.forEach(System.out::println);</span><br><span class="line">        log.info(<span class="string">&quot;=======set=======&quot;</span>);</span><br><span class="line">        commands.sadd(<span class="string">&quot;set&quot;</span>,<span class="string">&quot;set1&quot;</span>,<span class="string">&quot;set2&quot;</span>,<span class="string">&quot;set3&quot;</span>);</span><br><span class="line">        Set&lt;String&gt; set = commands.smembers(<span class="string">&quot;set&quot;</span>);</span><br><span class="line">        set.forEach(System.out::println);</span><br><span class="line">        log.info(<span class="string">&quot;=======hash=======&quot;</span>);</span><br><span class="line">        HashMap&lt;String, String&gt; hashMap = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span><br><span class="line">        hashMap.put(<span class="string">&quot;k1&quot;</span>, <span class="string">&quot;v1&quot;</span>);</span><br><span class="line">        hashMap.put(<span class="string">&quot;k2&quot;</span>, <span class="string">&quot;v2&quot;</span>);</span><br><span class="line">        hashMap.put(<span class="string">&quot;k3&quot;</span>, <span class="string">&quot;v3&quot;</span>);</span><br><span class="line">        commands.hset(<span class="string">&quot;hash&quot;</span>,hashMap);</span><br><span class="line">        Map&lt;String, String&gt; hash = commands.hgetall(<span class="string">&quot;hash&quot;</span>);</span><br><span class="line">        hash.keySet().forEach(System.out::println);</span><br><span class="line">        log.info(<span class="string">&quot;=======zset=======&quot;</span>);</span><br><span class="line">        commands.zadd(<span class="string">&quot;zset&quot;</span>,<span class="number">20d</span>,<span class="string">&quot;20&quot;</span>);</span><br><span class="line">        commands.zadd(<span class="string">&quot;zset&quot;</span>,<span class="number">30d</span>,<span class="string">&quot;30&quot;</span>);</span><br><span class="line">        commands.zadd(<span class="string">&quot;zset&quot;</span>,<span class="number">60d</span>,<span class="string">&quot;60&quot;</span>);</span><br><span class="line">        List&lt;String&gt; zset = commands.zrange(<span class="string">&quot;zset&quot;</span>, <span class="number">0</span>, -<span class="number">1</span>);</span><br><span class="line">        zset.forEach(System.out::println);</span><br><span class="line">        <span class="comment">//关闭资源</span></span><br><span class="line">        redisClient.shutdown();</span><br><span class="line">        redisClient.close();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="RedisTemplate"><a href="#RedisTemplate" class="headerlink" title="RedisTemplate"></a>RedisTemplate</h3><p>pom</p>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="comment">&lt;!-- redis --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-data-redis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.commons<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>commons-pool2<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- swagger3 OpenAPI --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springdoc<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>springdoc-openapi-starter-webmvc-ui<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>2.2.0<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p>yaml</p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">port:</span> <span class="number">8080</span></span><br><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">Redis7_study</span></span><br><span class="line">  <span class="attr">swagger2:</span></span><br><span class="line">    <span class="attr">enable:</span> <span class="literal">true</span> <span class="comment"># 是否开启swagger</span></span><br><span class="line">  <span class="attr">data:</span></span><br><span class="line">    <span class="attr">redis:</span></span><br><span class="line">      <span class="attr">host:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.128</span> <span class="comment"># redis IP 地址</span></span><br><span class="line">      <span class="attr">database:</span> <span class="number">0</span> <span class="comment"># redis 0号数据库</span></span><br><span class="line">      <span class="attr">port:</span> <span class="number">6379</span> <span class="comment"># redis 端口</span></span><br><span class="line">      <span class="attr">password:</span> <span class="string">redis</span> <span class="comment"># redis 密码</span></span><br><span class="line">      <span class="attr">lettuce:</span></span><br><span class="line">        <span class="attr">pool:</span> <span class="comment"># lettuce 连接池</span></span><br><span class="line">          <span class="attr">max-active:</span> <span class="number">8</span> <span class="comment"># 连接池最大连接数</span></span><br><span class="line">          <span class="attr">max-wait:</span> <span class="string">-1ms</span> <span class="comment"># 连接池最大阻塞等待</span></span><br><span class="line">          <span class="attr">max-idle:</span> <span class="number">8</span> <span class="comment"># 连接池最大空闲连接</span></span><br><span class="line">          <span class="attr">min-idle:</span> <span class="number">0</span> <span class="comment"># 连接池最小空闲连接</span></span><br></pre></td></tr></table></figure>
+
+<p>service</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">OrderService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">ORDER_KEY</span> <span class="operator">=</span> <span class="string">&quot;order:&quot;</span>;</span><br><span class="line">    </span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">addOrder</span><span class="params">()</span>&#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">keyId</span> <span class="operator">=</span> ThreadLocalRandom.current().nextInt(<span class="number">100</span>) + <span class="number">1</span>;</span><br><span class="line">        <span class="type">String</span> <span class="variable">order_id</span> <span class="operator">=</span> UUID.randomUUID().toString().replace(<span class="string">&quot;-&quot;</span>, <span class="string">&quot;&quot;</span>);</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> ORDER_KEY + keyId;</span><br><span class="line">        redisTemplate.opsForValue().set(key, <span class="string">&quot;京东订单：&quot;</span>+order_id);</span><br><span class="line">        log.info(<span class="string">&quot;*****京东订单已生成：编号&#123;&#125;,订单号&#123;&#125;&quot;</span>,key,order_id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">getOrder</span><span class="params">()</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> (String) redisTemplate.opsForValue().get(ORDER_KEY);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>controller</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="meta">@Tag(name = &quot;订单接口&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">OrderController</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> OrderService orderService;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@PostMapping(&quot;/order/add&quot;)</span></span><br><span class="line">    <span class="meta">@Operation(summary = &quot;新增订单&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">addOrder</span><span class="params">()</span> &#123;</span><br><span class="line">        orderService.addOrder();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/order/getOder/&#123;orderId&#125;&quot;)</span></span><br><span class="line">    <span class="meta">@Operation(summary = &quot;根据order获取订单&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">getOrder</span><span class="params">(<span class="meta">@PathVariable(&quot;orderId&quot;)</span> String orderId)</span> &#123;</span><br><span class="line">        orderService.getOrder();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>启动运行</p>
+<p><code>http://localhost:8080/swagger-ui/index.html</code></p>
+<p>测试 <code>addOrder</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423172232663.png" alt="image-20250423172232663"></p>
+<p>发现乱码，明明启动的时候已经添加了，解析中文的命令了，怎么还会乱码？</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423172632147.png" alt="image-20250423172632147"></p>
+<p>阅读RedisTemplate源码后发现，默认情况下，RedisTemplate 使用该数据列化方式，我们来看下源码 RedisTemplate#afterPropertiesSet()</p>
+<p>解决方法</p>
+<ol>
+<li><p>不用<code>RedisTemplate</code>改用<code>StringRedisTemplate</code></p>
+<p>orderService</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">OrderService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">ORDER_KEY</span> <span class="operator">=</span> <span class="string">&quot;order:&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> StringRedisTemplate stringRedisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">addOrder</span><span class="params">()</span>&#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">keyId</span> <span class="operator">=</span> ThreadLocalRandom.current().nextInt(<span class="number">100</span>) + <span class="number">1</span>;</span><br><span class="line">        <span class="type">String</span> <span class="variable">order_id</span> <span class="operator">=</span> UUID.randomUUID().toString().replace(<span class="string">&quot;-&quot;</span>, <span class="string">&quot;&quot;</span>);</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> ORDER_KEY + keyId;</span><br><span class="line">        stringRedisTemplate.opsForSet().add(key, order_id);</span><br><span class="line">        log.info(<span class="string">&quot;*****京东订单已生成：编号&#123;&#125;,订单号&#123;&#125;&quot;</span>,key,order_id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">getOrder</span><span class="params">()</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> stringRedisTemplate.opsForValue().get(ORDER_KEY);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>在测试一下</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423173345696.png" alt="image-20250423173345696"></p>
+<p>发现没有问题</p>
+</li>
+<li><p>继续使用<code>RedisTemplate</code>，添加<code>RedisConfig</code></p>
+<p>在RedisConfig里面 去指定序列化方式</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.config;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> org.springframework.context.annotation.Bean;</span><br><span class="line"><span class="keyword">import</span> org.springframework.context.annotation.Configuration;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.serializer.GenericJackson2JsonRedisSerializer;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.serializer.StringRedisSerializer;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Configuration</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RedisConfig</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * redis序列化的工具配置类，下面这个请一定开启配置</span></span><br><span class="line"><span class="comment">     * 127.0.0.1:6379&gt; keys *</span></span><br><span class="line"><span class="comment">     * 1) &quot;ord:102&quot;  序列化过</span></span><br><span class="line"><span class="comment">     * 2) &quot;\xac\xed\x00\x05t\x00\aord:102&quot;   野生，没有序列化过</span></span><br><span class="line"><span class="comment">     * this.redisTemplate.opsForValue(); //提供了操作string类型的所有方法</span></span><br><span class="line"><span class="comment">     * this.redisTemplate.opsForList(); // 提供了操作list类型的所有方法</span></span><br><span class="line"><span class="comment">     * this.redisTemplate.opsForSet(); //提供了操作set的所有方法</span></span><br><span class="line"><span class="comment">     * this.redisTemplate.opsForHash(); //提供了操作hash表的所有方法</span></span><br><span class="line"><span class="comment">     * this.redisTemplate.opsForZSet(); //提供了操作zset的所有方法</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> lettuceConnectionFactory</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@Bean</span></span><br><span class="line">    <span class="keyword">public</span> RedisTemplate&lt;String, Object&gt; <span class="title function_">redisTemplate</span><span class="params">(LettuceConnectionFactory lettuceConnectionFactory)</span></span><br><span class="line">    &#123;</span><br><span class="line">        RedisTemplate&lt;String,Object&gt; redisTemplate = <span class="keyword">new</span> <span class="title class_">RedisTemplate</span>&lt;&gt;();</span><br><span class="line"></span><br><span class="line">        redisTemplate.setConnectionFactory(lettuceConnectionFactory);</span><br><span class="line">        <span class="comment">//设置key序列化方式string</span></span><br><span class="line">        redisTemplate.setKeySerializer(<span class="keyword">new</span> <span class="title class_">StringRedisSerializer</span>());</span><br><span class="line">        <span class="comment">//设置value的序列化方式json，使用GenericJackson2JsonRedisSerializer替换默认序列化</span></span><br><span class="line">        redisTemplate.setValueSerializer(<span class="keyword">new</span> <span class="title class_">GenericJackson2JsonRedisSerializer</span>());</span><br><span class="line"></span><br><span class="line">        redisTemplate.setHashKeySerializer(<span class="keyword">new</span> <span class="title class_">StringRedisSerializer</span>());</span><br><span class="line">        redisTemplate.setHashValueSerializer(<span class="keyword">new</span> <span class="title class_">GenericJackson2JsonRedisSerializer</span>());</span><br><span class="line"></span><br><span class="line">        redisTemplate.afterPropertiesSet();</span><br><span class="line"></span><br><span class="line">        <span class="keyword">return</span> redisTemplate;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>测试</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423173757259.png" alt="image-20250423173757259"></p>
+<p>也没有问题</p>
+</li>
+</ol>
+<p><code>getOder</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423172552580.png" alt="image-20250423172552580"></p>
+<h3 id="连接redis注意："><a href="#连接redis注意：" class="headerlink" title="连接redis注意："></a>连接redis注意：</h3><blockquote>
+<ol>
+<li>bind 配置请注释掉</li>
+<li>保护模式设置为no</li>
+<li>linux 系统的防火墙设置</li>
+<li>redis服务器的IP和密码是否正确</li>
+<li>忘记写访问redis的服务端口号和密码</li>
+<li>slave-read-only 设置成no 要不然服务器没有读写权限</li>
+</ol>
+</blockquote>
+<h3 id="Spring集成RedisTemplate集群"><a href="#Spring集成RedisTemplate集群" class="headerlink" title="Spring集成RedisTemplate集群"></a>Spring集成RedisTemplate集群</h3><ol>
+<li><p>启动redis集6台实例</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423180832763.png" alt="image-20250423180832763"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423181037369.png" alt="image-20250423181037369"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423181054269.png" alt="image-20250423181054269"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423181534546.png" alt="image-20250423181534546"></p>
+<p>添加集群yaml</p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">port:</span> <span class="number">8080</span></span><br><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">Redis7_study</span></span><br><span class="line">  <span class="attr">swagger2:</span></span><br><span class="line">    <span class="attr">enable:</span> <span class="literal">true</span> <span class="comment"># 是否开启swagger</span></span><br><span class="line">  <span class="attr">data:</span></span><br><span class="line">    <span class="attr">redis:</span></span><br><span class="line">      <span class="attr">host:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.128</span> <span class="comment"># redis IP 地址</span></span><br><span class="line">      <span class="attr">database:</span> <span class="number">0</span> <span class="comment"># redis 0号数据库</span></span><br><span class="line">      <span class="attr">port:</span> <span class="number">6379</span> <span class="comment"># redis 端口</span></span><br><span class="line">      <span class="attr">password:</span> <span class="string">redis</span> <span class="comment"># redis 密码</span></span><br><span class="line">      <span class="attr">lettuce:</span></span><br><span class="line">        <span class="attr">pool:</span> <span class="comment"># lettuce 连接池</span></span><br><span class="line">          <span class="attr">max-active:</span> <span class="number">8</span> <span class="comment"># 连接池最大连接数</span></span><br><span class="line">          <span class="attr">max-wait:</span> <span class="string">-1ms</span> <span class="comment"># 连接池最大阻塞等待</span></span><br><span class="line">          <span class="attr">max-idle:</span> <span class="number">8</span> <span class="comment"># 连接池最大空闲连接</span></span><br><span class="line">          <span class="attr">min-idle:</span> <span class="number">0</span> <span class="comment"># 连接池最小空闲连接</span></span><br><span class="line">      <span class="attr">cluster:</span> <span class="comment"># 添加集群</span></span><br><span class="line">        <span class="attr">nodes:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.128</span><span class="string">:6381,192.168.0.128:6382,192.168.0.128:6383,192.168.0.128:6384,192.168.0.128:6385,192.168.0.128:6386</span></span><br></pre></td></tr></table></figure>
+
+<p>启动测试</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423181827763.png" alt="image-20250423181827763"></p>
+<p>添加成功</p>
+</li>
+<li><p>问题 <strong>SpringBoot2出现的问题</strong></p>
+<ol>
+<li><p>人为模拟，master-6381机器意外宕机，手动shutdown</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423182130443.png" alt="image-20250423182130443"></p>
+</li>
+<li><p>在对redis集群命令方式，手动验证各种读写命令，看看6384是否上位</p>
+<ol>
+<li>6384已经上位了</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250423182241046.png" alt="image-20250423182241046"></p>
+</li>
+<li><p>Redis Cluster 集群能自动感知并自动完成主备切换，对应的slave6384会被选举出新的master节点</p>
+</li>
+<li><p>微服务客户端再次读写访问试试</p>
+<ol>
+<li><p>Redis Cluster集群部署采用了3主3从拓扑结构，数据读写访问master节点， slave节点负责备份。当master宕机主从切换成功，redis手动OK，but 2个经典故障</p>
+</li>
+<li><p><img src="/hexo-docs/images/redisImages/image-20250423182602782.png" alt="image-20250423182602782"></p>
+</li>
+<li><p>SpringBoot 2.X 版本，Redis 默认的连接池采用 Lettuce 当 Redis集群节点发生变化后，Lettuce  默认是不会刷新节点拓扑</p>
+</li>
+<li><p>解决方案</p>
+<ol>
+<li><p>排除 Lettuce 采用 Jedis（不推荐）</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423182748514.png" alt="image-20250423182748514"></p>
+</li>
+<li><p>重写连接工厂实例（极度不推荐）</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Bean</span></span><br><span class="line"><span class="keyword">public</span> DefaultClientResources <span class="title function_">lettuceClientResources</span><span class="params">()</span> &#123;</span><br><span class="line">    <span class="keyword">return</span> DefaultClientResources.create();</span><br><span class="line">&#125;</span><br><span class="line"><span class="meta">@Bean</span></span><br><span class="line"><span class="keyword">public</span> LettuceConnectionFactory <span class="title function_">lettuceConnectionFactory</span><span class="params">(RedisProperties redisProperties, ClientResources clientResources)</span> &#123;</span><br><span class="line">    <span class="type">ClusterTopologyRefreshOptions</span> <span class="variable">topologyRefreshOptions</span> <span class="operator">=</span> ClusterTopologyRefreshOptions.builder()</span><br><span class="line">            .enablePeriodicRefresh(Duration.ofSeconds(<span class="number">30</span>)) <span class="comment">//按照周期刷新拓扑</span></span><br><span class="line">            .enableAllAdaptiveRefreshTriggers() <span class="comment">//根据事件刷新拓扑</span></span><br><span class="line">            .build();</span><br><span class="line">    <span class="type">ClusterClientOptions</span> <span class="variable">clusterClientOptions</span> <span class="operator">=</span> ClusterClientOptions.builder()</span><br><span class="line">            <span class="comment">//redis命令超时时间,超时后才会使用新的拓扑信息重新建立连</span></span><br><span class="line">            .timeoutOptions(TimeoutOptions.enabled(Duration.ofSeconds(<span class="number">10</span>)))</span><br><span class="line">            .topologyRefreshOptions(topologyRefreshOptions)</span><br><span class="line">            .build();</span><br><span class="line">    <span class="type">LettuceClientConfiguration</span> <span class="variable">clientConfiguration</span> <span class="operator">=</span> LettuceClientConfiguration.builder()</span><br><span class="line">            .clientResources(clientResources)</span><br><span class="line">            .clientOptions(clusterClientOptions)</span><br><span class="line">            .build();</span><br><span class="line">    <span class="type">RedisClusterConfiguration</span> <span class="variable">clusterConfig</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">RedisClusterConfiguration</span>(redisProperties.getCluster().getNodes());</span><br><span class="line">    clusterConfig.setMaxRedirects(redisProperties.getCluster().getMaxRedirects());</span><br><span class="line">    clusterConfig.setPassword(RedisPassword.of(redisProperties.getPassword()));</span><br><span class="line">    <span class="type">LettuceConnectionFactory</span> <span class="variable">lettuceConnectionFactory</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">LettuceConnectionFactory</span>(clusterConfig, clientConfiguration);</span><br><span class="line">    <span class="keyword">return</span> lettuceConnectionFactory;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>刷新节点集群拓扑动态感应</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250423182940311.png" alt="image-20250423182940311"></p>
+</li>
+<li><p>改写yaml</p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">port:</span> <span class="number">8080</span></span><br><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">Redis7_study</span></span><br><span class="line">  <span class="attr">swagger2:</span></span><br><span class="line">    <span class="attr">enable:</span> <span class="literal">true</span> <span class="comment"># 是否开启swagger</span></span><br><span class="line">  <span class="attr">data:</span></span><br><span class="line">    <span class="attr">redis:</span></span><br><span class="line">      <span class="attr">host:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.128</span> <span class="comment"># redis IP 地址</span></span><br><span class="line">      <span class="attr">database:</span> <span class="number">0</span> <span class="comment"># redis 0号数据库</span></span><br><span class="line">      <span class="attr">port:</span> <span class="number">6379</span> <span class="comment"># redis 端口</span></span><br><span class="line">      <span class="attr">password:</span> <span class="string">redis</span> <span class="comment"># redis 密码</span></span><br><span class="line">      <span class="attr">lettuce:</span></span><br><span class="line">        <span class="attr">pool:</span> <span class="comment"># lettuce 连接池</span></span><br><span class="line">          <span class="attr">max-active:</span> <span class="number">8</span> <span class="comment"># 连接池最大连接数</span></span><br><span class="line">          <span class="attr">max-wait:</span> <span class="string">-1ms</span> <span class="comment"># 连接池最大阻塞等待</span></span><br><span class="line">          <span class="attr">max-idle:</span> <span class="number">8</span> <span class="comment"># 连接池最大空闲连接</span></span><br><span class="line">          <span class="attr">min-idle:</span> <span class="number">0</span> <span class="comment"># 连接池最小空闲连接</span></span><br><span class="line">      <span class="attr">cluster:</span> <span class="comment"># 添加集群</span></span><br><span class="line">        <span class="attr">nodes:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.128</span><span class="string">:6381,192.168.0.128:6382,192.168.0.128:6383,192.168.0.128:6384,192.168.0.128:6385,192.168.0.128:6386</span></span><br><span class="line">        <span class="attr">refresh:</span></span><br><span class="line">         <span class="attr">period:</span> <span class="number">2000</span> <span class="comment"># 定时刷新</span></span><br><span class="line">        <span class="attr">refresh:</span></span><br><span class="line">         <span class="attr">adaptive:</span> <span class="literal">true</span> <span class="comment">#支持集群拓扑动态感应刷新,自适应拓扑刷新是否使用所有可用的更新，默认false关闭</span></span><br></pre></td></tr></table></figure></li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs">Lazy</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/sentinel&amp;cluster/">https://mac2git.github.io/hexo-docs/2025/08/13/redis/sentinel&amp;cluster/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://mac2git.github.io/hexo-docs" target="_blank">Lazy的个人博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/hexo-docs/tags/Redis/">Redis</a></div><div class="post-share"><div class="social-share" data-image="https://pic.crazytaxii.com/Redis_Logo.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img class="cover" src="https://sca.aliyun.com/sca-icon.svg" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">SpringCloud Alibaba 第二章</div></div><div class="info-2"><div class="info-item-1">OpenFeign、OpenFeign的重试机制</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/transactions&amp;pipeline/" title="管道&amp;事务"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">管道&事务</div></div><div class="info-2"><div class="info-item-1">Redis事务可以一次执行多个命令，本质是一组命令的集合。一个事务中的所有命令都会序列化，按顺序地串行化而不会被其他命令插入，不许加塞 能干嘛？ 一个队列中，一次性、顺序性、排他性的执行一系列命令 redis事务 vs 数据库事务   1 单独的隔离操作 Redis的事务仅仅是保证事务里的操作会被连续独占的执行，redis命令执行是单线程架构，在执行完事务内所有指令前是不可能再去同时执行其他客户端的请求的    2 没有隔离级别的概念 因为事务提交前任何指令都不会被实际执行，也就不存在”事务内的查询要看到事务里的更新，在事务外查询不能看到”这种问题了   3不保证原子性 Redis的事务不保证原子性，也就是不保证所有指令同时成功或同时失败，只有决定是否开始执行全部指令的能力，没有执行到一半进行回滚的能力   4 排它性 Redis会保证一个事务内的命令依次执行，而不会被其它命令插入   常用命令   序号 描述    1 discard：取消事务，放弃执行事务块内的所以命令   2 exec：执行所有事务块内的命令   3 multi：标记一个事务块的开始   4 unwatch...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RedLock算法和底层源码分析和缓存淘汰策略</div></div><div class="info-2"><div class="info-item-1">上一章自研的redis锁对于一般中小公司，不是特别高并发场景足够用了，单机redis小业务也撑得住。但是对于特别高并发场景的话，就得使用Redisson了 Redis分布式锁-RedLock红锁算法（Distributed locks with Redis）官网：Redis 的分布式锁 |文档 说明：  为什么学习这个？怎样产生的？   线程 1 首先获取锁成功，将键值对写入 redis 的 master 节点，在 redis 将该键值对同步到 slave 节点之前，master 发生了故障；redis 触发故障转移，其中一个 slave 升级为新的 master，此时新上位的master并不包含线程1写入的键值对，因此线程 2 尝试获取锁也可以成功拿到锁，此时相当于有两个线程获取到了锁，可能会导致各种预期之外的情况发生，例如最常见的脏数据。  我们加的是排它独占锁，同一时间只能有一个建redis锁成功并持有锁，严禁出现2个以上的请求线程拿到锁。危险的！ RedLock算法设计理念Redis也提供了Redlock算法，用来实现基于多个实例的分布式锁。锁变量由多个实例维护，即使有实...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RDB+AOF</div></div><div class="info-2"><div class="info-item-1">redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 RDB（Redis 数据库）：RDB 持久性以指定的时间间隔执行数据集的时间点快照。  rdb（redis database）能干嘛？ 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot内存快照，它恢复时再将硬盘快照文件直接读回到内存里。Redis的数据都在内存中，保存备份时它执行的是全量快照，也就是说，把内存中的所有数据都记录到磁盘中，一锅端。 Rdb保存的是dump.rdb文件  Redis6.0.16以下  Redis6.2以及Redis-7.0.0  自动触发 redis7版本，按照redis.conf里配置的save&lt;seconds&gt;&lt...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">BigKey和缓存双写</div></div><div class="info-2"><div class="info-item-1">Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。—貌似  2020年5月版本的6.0.x后及2022年出的7.0版本后，告别了大家印象中的单线程，用一种全新的多线程来解决问题。—实锤   几个里程碑的redis版本！  5.0版本是直接升级到6.0版本，对于这个激进的升级，Redis之父antirez表现得很有信心和兴奋， 所以第一时间发文来阐述6.0的一些重大功能”Redis 6.0.0 GA is out!” 当然，Redis7.0后版本更加厉害  Redis是单线程 主要是指Redis的网络IO和键值对读写是由一个线程来完成的，Redis在处理客户端的请求时包括获取 (socket 读)、解析、执行、内容返回 (socket 写...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">Redis基础</div></div><div class="info-2"><div class="info-item-1">什么是Redis？Redis 是一个内存数据存储，被数百万开发者用作缓存、向量数据库、文档数据库、流式引擎和消息代理。Redis 具有内置的复制和不同级别的磁盘持久化。它支持复杂的数据类型（例如，字符串、散列、列表、集合、有序集合和 JSON），并为这些数据类型定义了原子操作。 Redis 通常被称为数据结构服务器。这意味着 Redis 通过一组命令提供对可变数据结构的访问，这些命令通过 TCP 套接字和简单协议使用服务器-客户端模型发送。因此，不同的进程可以以共享的方式查询和修改相同的数据结构。 Redis 实现的数据结构具有一些特殊的属性：  Redis 会将其存储在磁盘上，即使它们总是被服务器内存中读取和修改。这意味着 Redis 速度快，但同时也非易失性。 数据结构的实现强调内存效率，因此 Redis 内部的数据结构可能比使用高级编程语言建模的相同数据结构模型使用更少的内存。 Redis 提供了一系列数据库中常见的功能，如复制、可调的持久性级别、集群和高度可用性。  下载Redis 命名规则： ​	版本号第二位如果是奇数，则为非稳定版本，如2.7、2.9、3.1 ​	版本...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">epoll函数和IO多路复用深度解析</div></div><div class="info-2"><div class="info-item-1">epoll 函数和 IO 多路复用深度解析没有 epoll 和 IO 多路复用之前多路复用要解决的问题并发多客户端连接，在多路复用之前最简单和典型的方案：同步阻塞网络IO模型 这种模式的特点就是用一个进程来处理一个网络连接(一个用户请求)，比如一段典型的示例代码如下。 直接调用 recv 函数从一个 socket 上读取数据。 int main()&#123; ... recv(sock, ...) //从用户角度来看非常简单，一个recv一用，要接收的数据就到我们手里了。&#125;  我们来总结一下这种方式： 优点： 就是这种方式非常容易让人理解，写起代码来非常的自然，符合人的直线型思维。 缺点： 就是性能差，每个用户请求到来都得占用一个进程来处理，来一个请求就要分配一个进程跟进处理， 类似一个学生配一个老师，一位患者配一个医生，可能吗？进程是一个很笨重的东西。一台服务器上创建不了多少个进程。 结论进程在 Linux 上是一个开销不小的家伙，先不说创建，光是上下文切换一次就得几个微秒。所以为了高效地对海量用户提供服务，必须要让一个进程能同时处理很多个 tcp 连接才行。现在假...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/" title="HyperLogLog&amp;Geo&amp;Bitmap"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">HyperLogLog&amp;Geo&amp;Bitmap</div></div><div class="info-2"><div class="info-item-1">统计类型有哪些？ 亿级系统中常见的四种统计  聚合统计 统计多个集合元素的聚合结果，就是前面的交集差集等集合统计   排序统计（zset） 在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet  因为可以使用分页，正反排序  二值统计（bitmap） 集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）  基数统计（hyperloglog） 指 统计一个集合不重复元素个数     HyperLogLog名词解释  什么是UV?  Unique Visitor，独立访客，一般理解为客户端IP 需要去重考虑，例如一个人一天访问了10次网站，一天的UV就是1   什么是PV?  Page View，页面浏览量 不用去重，例如一个人一天访问了10次网站，一天的PV就是10   什么是DAU?  Daily  Active User  日活跃用户量 登录或者使用了某个产品的用户数（去重复登录的用户），避免恶意刷单  常用于反映网站，互联网应用或者网络游戏的运营情况      什么是MAU？  Monthly...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-1"><a class="toc-link" href="#%E5%93%A8%E5%85%B5%EF%BC%88sentinel%EF%BC%89-%E9%9B%86%E7%BE%A4%EF%BC%88cluster%EF%BC%89"><span class="toc-number">1.</span> <span class="toc-text">哨兵（sentinel）&amp;集群（cluster）</span></a><ol class="toc-child"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%93%A8%E5%85%B5%EF%BC%88sentinel%EF%BC%89"><span class="toc-number">1.1.</span> <span class="toc-text">哨兵（sentinel）</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%93%A8%E5%85%B5%E5%8E%9F%E7%90%86"><span class="toc-number">1.2.</span> <span class="toc-text">哨兵原理</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#sentinel%E9%85%8D%E7%BD%AE%E6%96%87%E4%BB%B6"><span class="toc-number">1.3.</span> <span class="toc-text">sentinel配置文件</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AEsentinel"><span class="toc-number">1.3.1.</span> <span class="toc-text">配置sentinel</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%85%8D%E7%BD%AE%E4%B8%BB%E6%9C%BA6379%E7%9A%84%E8%AE%BF%E9%97%AE%E5%AF%86%E7%A0%81"><span class="toc-number">1.3.2.</span> <span class="toc-text">配置主机6379的访问密码</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%90%AF%E5%8A%A8sentinel"><span class="toc-number">1.3.3.</span> <span class="toc-text">启动sentinel</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%93%E8%AE%BA"><span class="toc-number">1.3.4.</span> <span class="toc-text">结论</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%B5%81%E7%A8%8B%E5%92%8C%E9%80%89%E4%B8%BE%E5%8E%9F%E7%90%86"><span class="toc-number">1.4.</span> <span class="toc-text">运行流程和选举原理</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%90%E8%A1%8C%E6%B5%81%E7%A8%8B%EF%BC%8C%E6%95%85%E9%9A%9C%E5%88%87%E6%8D%A2"><span class="toc-number">1.4.1.</span> <span class="toc-text">运行流程，故障切换</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%89%E4%B8%AA%E5%93%A8%E5%85%B5%E7%9B%91%E6%8E%A7%E4%B8%80%E4%B8%BB%E4%BA%8C%E4%BB%8E%EF%BC%8C%E6%AD%A3%E5%B8%B8%E8%BF%90%E8%A1%8C%E4%B8%AD"><span class="toc-number">1.4.1.1.</span> <span class="toc-text">三个哨兵监控一主二从，正常运行中</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#SDown%E4%B8%BB%E8%A7%82%E4%B8%8B%E7%BA%BF%EF%BC%88Subjectively-Down%EF%BC%89"><span class="toc-number">1.4.1.2.</span> <span class="toc-text">SDown主观下线（Subjectively Down）:</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#ODown%E5%AE%A2%E8%A7%82%E4%B8%8B%E7%BA%BF%EF%BC%88Objectively-Down%EF%BC%89"><span class="toc-number">1.4.1.3.</span> <span class="toc-text">ODown客观下线（Objectively Down）</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E9%80%89%E4%B8%BE%E5%87%BA%E9%A2%86%E5%AF%BC%E8%80%85%E5%93%A8%E5%85%B5%EF%BC%88%E5%93%A8%E5%85%B5%E4%B8%AD%E9%80%89%E5%87%BA%E5%85%B5%E7%8E%8B%EF%BC%88leader%EF%BC%89%EF%BC%89"><span class="toc-number">1.4.1.4.</span> <span class="toc-text">选举出领导者哨兵（哨兵中选出兵王（leader））</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%B1%E5%85%B5%E7%8E%8B%EF%BC%88leader%EF%BC%89%E5%BC%80%E5%A7%8B%E6%8E%A8%E5%8A%A8%E6%95%85%E9%9A%9C%E5%88%87%E6%8D%A2%E6%B5%81%E7%A8%8B%E5%B9%B6%E9%80%89%E5%87%BA%E4%B8%80%E4%B8%AA%E6%96%B0%E7%9A%84master"><span class="toc-number">1.4.2.</span> <span class="toc-text">由兵王（leader）开始推动故障切换流程并选出一个新的master</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#3%E4%B8%AA%E6%AD%A5%E9%AA%A4"><span class="toc-number">1.4.2.1.</span> <span class="toc-text">3个步骤</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.4.3.</span> <span class="toc-text">总结</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E4%BD%BF%E7%94%A8%E5%BB%BA%E8%AE%AE"><span class="toc-number">1.4.4.</span> <span class="toc-text">使用建议</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%EF%BC%88cluster%EF%BC%89"><span class="toc-number">1.5.</span> <span class="toc-text">集群（cluster）</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E7%AE%97%E6%B3%95-%E5%88%86%E7%89%87-%E6%A7%BD%E4%BD%8Dslot"><span class="toc-number">1.5.1.</span> <span class="toc-text">集群算法-分片-槽位slot</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#redis%E9%9B%86%E7%BE%A4%E7%9A%84%E6%A7%BD%E4%BD%8Dslot"><span class="toc-number">1.5.1.1.</span> <span class="toc-text">redis集群的槽位slot</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#redis%E9%9B%86%E7%BE%A4%E7%9A%84%E5%88%86%E7%89%87"><span class="toc-number">1.5.1.2.</span> <span class="toc-text">redis集群的分片</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#redis%E9%9B%86%E7%BE%A4%E7%9A%84%E6%A7%BD%E4%BD%8D%E5%92%8C%E5%88%86%E7%89%87%E7%9A%84%E4%BC%98%E5%8A%BF"><span class="toc-number">1.5.1.3.</span> <span class="toc-text">redis集群的槽位和分片的优势</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#slot%E6%A7%BD%E4%BD%8D%E6%98%A0%E5%B0%84%EF%BC%8C%E4%B8%80%E8%88%AC%E4%B8%9A%E7%95%8C%E6%9C%893%E7%A7%8D%E8%A7%A3%E5%86%B3%E6%96%B9%E6%A1%88"><span class="toc-number">1.5.1.4.</span> <span class="toc-text">slot槽位映射，一般业界有3种解决方案</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%93%88%E5%B8%8C%E5%8F%96%E4%BD%99%E5%88%86%E5%8C%BA"><span class="toc-number">1.5.1.4.1.</span> <span class="toc-text">哈希取余分区</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E4%B8%80%E8%87%B4%E6%80%A7%E5%93%88%E5%B8%8C%E7%AE%97%E6%B3%95%E5%88%86%E5%8C%BA"><span class="toc-number">1.5.1.4.2.</span> <span class="toc-text">一致性哈希算法分区</span></a><ol class="toc-child"><li class="toc-item toc-level-6"><a class="toc-link" href="#%E4%B8%89%E5%A4%A7%E6%AD%A5%E9%AA%A4"><span class="toc-number">1.5.1.4.2.1.</span> <span class="toc-text">三大步骤</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E4%BC%98%E7%82%B9"><span class="toc-number">1.5.1.4.2.2.</span> <span class="toc-text">优点</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E7%BC%BA%E7%82%B9"><span class="toc-number">1.5.1.4.2.3.</span> <span class="toc-text">缺点</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E6%80%BB%E7%BB%93-1"><span class="toc-number">1.5.1.4.2.4.</span> <span class="toc-text">总结</span></a></li></ol></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%93%88%E5%B8%8C%E6%A7%BD%E5%88%86%E5%8C%BA%EF%BC%88HASH-SLOT-CRC16-key-mod-16384%EF%BC%89"><span class="toc-number">1.5.1.4.3.</span> <span class="toc-text">哈希槽分区（HASH_SLOT&#x3D;CRC16(key) mod 16384）</span></a><ol class="toc-child"><li class="toc-item toc-level-6"><a class="toc-link" href="#%E5%93%88%E5%B8%8C%E6%A7%BD%E8%AE%A1%E7%AE%97"><span class="toc-number">1.5.1.4.3.1.</span> <span class="toc-text">哈希槽计算</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E4%B8%BA%E4%BB%80%E4%B9%88redis%E9%9B%86%E7%BE%A4%E7%9A%84%E6%9C%80%E5%A4%A7%E6%A7%BD%E6%95%B0%E6%98%AF16384%E4%B8%AA%EF%BC%9F"><span class="toc-number">1.5.1.4.3.2.</span> <span class="toc-text">为什么redis集群的最大槽数是16384个？</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E7%BB%93%E8%AE%BA-1"><span class="toc-number">1.5.1.4.3.3.</span> <span class="toc-text">结论</span></a></li></ol></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3%E4%B8%BB3%E4%BB%8Eredis%E9%9B%86%E7%BE%A4%E7%9A%84%E9%85%8D%E7%BD%AE"><span class="toc-number">1.5.1.5.</span> <span class="toc-text">3主3从redis集群的配置</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3%E4%B8%BB3%E4%BB%8Eredis%E9%9B%86%E7%BE%A4%E8%AF%BB%E5%86%99"><span class="toc-number">1.5.1.6.</span> <span class="toc-text">3主3从redis集群读写</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BB%E4%BB%8E%E5%88%87%E6%8D%A2%E5%AE%B9%E9%94%99%E5%88%87%E6%8D%A2"><span class="toc-number">1.5.1.7.</span> <span class="toc-text">主从切换容错切换</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BB%E4%BB%8E%E6%89%A9%E5%AE%B9%E6%A1%88%E4%BE%8B"><span class="toc-number">1.5.1.8.</span> <span class="toc-text">主从扩容案例</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%B8%BB%E4%BB%8E%E7%BC%A9%E5%AE%B9%E6%A1%88%E4%BE%8B"><span class="toc-number">1.5.1.9.</span> <span class="toc-text">主从缩容案例</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E9%9B%86%E7%BE%A4%E5%B8%B8%E7%94%A8%E6%93%8D%E4%BD%9C%E5%91%BD%E4%BB%A4%E5%92%8CCRC16%E7%AE%97%E6%B3%95%E5%88%86%E6%9E%90"><span class="toc-number">1.5.2.</span> <span class="toc-text">集群常用操作命令和CRC16算法分析</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#SpringBoot%E9%9B%86%E6%88%90Redis"><span class="toc-number">1.6.</span> <span class="toc-text">SpringBoot集成Redis</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#Jedis"><span class="toc-number">1.6.1.</span> <span class="toc-text">Jedis</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Lettuce"><span class="toc-number">1.6.2.</span> <span class="toc-text">Lettuce</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RedisTemplate"><span class="toc-number">1.6.3.</span> <span class="toc-text">RedisTemplate</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E8%BF%9E%E6%8E%A5redis%E6%B3%A8%E6%84%8F%EF%BC%9A"><span class="toc-number">1.6.4.</span> <span class="toc-text">连接redis注意：</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Spring%E9%9B%86%E6%88%90RedisTemplate%E9%9B%86%E7%BE%A4"><span class="toc-number">1.6.5.</span> <span class="toc-text">Spring集成RedisTemplate集群</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix"><img src="https://spring.io/img/projects/spring-cloud.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Netflix"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix">SpringCloud Netflix</a><time datetime="2025-08-23T16:00:00.000Z" title="发表于 2025-08-24 00:00:00">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第二章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章">SpringCloud Alibaba 第二章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第三章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章">SpringCloud Alibaba 第三章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: true,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>

@@ -1,0 +1,504 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>HyperLogLog&amp;Geo&amp;Bitmap | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="统计类型有哪些？ 亿级系统中常见的四种统计  聚合统计 统计多个集合元素的聚合结果，就是前面的交集差集等集合统计   排序统计（zset） 在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet  因为可以使用分页，正反排序  二值统计（bitmap） 集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）  基数统计">
+<meta property="og:type" content="article">
+<meta property="og:title" content="HyperLogLog&amp;Geo&amp;Bitmap">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="统计类型有哪些？ 亿级系统中常见的四种统计  聚合统计 统计多个集合元素的聚合结果，就是前面的交集差集等集合统计   排序统计（zset） 在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet  因为可以使用分页，正反排序  二值统计（bitmap） 集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）  基数统计">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://pic.crazytaxii.com/Redis_Logo.png">
+<meta property="article:published_time" content="2025-08-12T16:00:00.000Z">
+<meta property="article:modified_time" content="2025-08-22T17:03:22.043Z">
+<meta property="article:author" content="Lazy">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic.crazytaxii.com/Redis_Logo.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "HyperLogLog&Geo&Bitmap",
+  "url": "https://mac2git.github.io/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/",
+  "image": "https://pic.crazytaxii.com/Redis_Logo.png",
+  "datePublished": "2025-08-12T16:00:00.000Z",
+  "dateModified": "2025-08-22T17:03:22.043Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lazy",
+      "url": "https://mac2git.github.io/hexo-docs"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'HyperLogLog&Geo&Bitmap',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(https://pic.crazytaxii.com/Redis_Logo.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a><a class="nav-page-title" href="/hexo-docs/"><span class="site-name">HyperLogLog&amp;Geo&amp;Bitmap</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">HyperLogLog&amp;Geo&amp;Bitmap</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-08-22T17:03:22.043Z" title="更新于 2025-08-23 01:03:22">2025-08-23</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Redis/">后端 Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">4.1k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>17分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="统计类型有哪些？"><a href="#统计类型有哪些？" class="headerlink" title="统计类型有哪些？"></a>统计类型有哪些？</h2><ul>
+<li><p>亿级系统中常见的四种统计</p>
+<ul>
+<li><p>聚合统计</p>
+<p>统计多个集合元素的聚合结果，就是前面的交集差集等集合统计</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250630182439434.png" alt="image-20250630182439434"></p>
+</li>
+<li><p>排序统计（zset）</p>
+<p>在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250630182620433.png" alt="image-20250630182620433"></p>
+<p>因为可以使用分页，正反排序</p>
+</li>
+<li><p>二值统计（bitmap）</p>
+<p>集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）</p>
+</li>
+<li><p>基数统计（hyperloglog）</p>
+<p>指 <strong>统计一个集合不重复元素个数</strong></p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="HyperLogLog"><a href="#HyperLogLog" class="headerlink" title="HyperLogLog"></a>HyperLogLog</h2><p>名词解释</p>
+<ul>
+<li><p>什么是<code>UV</code>?</p>
+<ul>
+<li>Unique Visitor，独立访客，一般理解为客户端<code>IP</code></li>
+<li>需要去重考虑，例如一个人一天访问了10次网站，一天的<code>UV</code>就是1</li>
+</ul>
+</li>
+<li><p>什么是<code>PV</code>?</p>
+<ul>
+<li>Page View，页面浏览量</li>
+<li>不用去重，例如一个人一天访问了10次网站，一天的<code>PV</code>就是10</li>
+</ul>
+</li>
+<li><p>什么是<code>DAU</code>?</p>
+<ul>
+<li><p>Daily  Active User</p>
+<ul>
+<li><p>日活跃用户量</p>
+<p>登录或者使用了某个产品的用户数（去重复登录的用户），避免恶意刷单</p>
+</li>
+<li><p>常用于反映网站，互联网应用或者网络游戏的运营情况</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p>什么是<code>MAU</code>？</p>
+<ul>
+<li><p>Monthly Active User</p>
+<p>月活跃用户量</p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="需求"><a href="#需求" class="headerlink" title="需求"></a>需求</h2><p>很多计数类场景，比如 每日注册 IP 数、每日访问 IP 数、页面实时访问数 PV、访问用户数 UV等。</p>
+<p>因为主要的目标高效、巨量地进行计数，所以对存储的数据的内容并不太关心。</p>
+<p>也就是说它只能用于统计巨量数量，不太涉及具体的统计对象的内容和精准性。</p>
+<p>统计单日一个页面的访问量(PV)，单次访问就算一次。</p>
+<p>统计单日一个页面的用户访问量(UV)，即按照用户为维度计算，单个用户一天内多次访问也只算一次。</p>
+<p>多个key的合并统计，某个门户网站的所有模块的PV聚合统计就是整个网站的总PV。</p>
+<h2 id="HyperLogLog是什么？"><a href="#HyperLogLog是什么？" class="headerlink" title="HyperLogLog是什么？"></a>HyperLogLog是什么？</h2><p>基数（HyperLogLog）：是一种数据集，去重复后的真实个数</p>
+<p>例如：</p>
+<p>​	（全集）&#x3D;2,4,6,8,77,39,4,8,10</p>
+<p>​	去掉重复的内容</p>
+<p>​	基数 &#x3D; {2,4,6,8,77,39,10} &#x3D; 7</p>
+<p>去重复统计功能的基数算法-就是<code>HyperLogLog</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701165444246.png" alt="image-20250701165444246"></p>
+<p>基数统计：用于统计一个集合中不重复的元素个数，就是对集合去重复后剩余元素的计算</p>
+<p>一句话：去重脱水后的真实数据</p>
+<p>基本命令：</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701165630737.png" alt="image-20250701165630737"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701165643622.png" alt="image-20250701165643622"></p>
+<h3 id="原理说明"><a href="#原理说明" class="headerlink" title="原理说明"></a>原理说明</h3><ul>
+<li>只是进行不重复的基数统计，不是集合也不保存数据，只记录数量而不是具体内容</li>
+<li>有误差<ul>
+<li>HyperLogLog提供不精确的去重计数方案</li>
+<li>牺牲准确率来换取时间，误差仅仅是0.81%左右</li>
+</ul>
+</li>
+<li>误差出处<ul>
+<li><a target="_blank" rel="noopener" href="http://antirez.com/news/75">http://antirez.com/news/75</a></li>
+</ul>
+</li>
+</ul>
+<h2 id="HyperLogLog-案例"><a href="#HyperLogLog-案例" class="headerlink" title="HyperLogLog 案例"></a>HyperLogLog 案例</h2><p>统计<code>UV</code>(需要去重)的访问量</p>
+<p><code>HyperLogLogService</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.PostConstruct;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.Random;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">HyperLogLogService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String,Object&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * PostConstruct：页面初始化完成之后立即执行该方法</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="meta">@PostConstruct</span></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">initIp</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">new</span> <span class="title class_">Thread</span>(() -&gt; &#123;</span><br><span class="line">            String ip;</span><br><span class="line">            <span class="keyword">for</span> (<span class="type">int</span> <span class="variable">i</span> <span class="operator">=</span> <span class="number">0</span>; i &lt; <span class="number">200</span>; i++) &#123;</span><br><span class="line">                <span class="type">Random</span> <span class="variable">random</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Random</span>();</span><br><span class="line">                ip = random.nextInt(<span class="number">256</span>) + <span class="string">&quot;.&quot;</span></span><br><span class="line">                        + random.nextInt(<span class="number">256</span>) + <span class="string">&quot;.&quot;</span></span><br><span class="line">                        + random.nextInt(<span class="number">256</span>) + <span class="string">&quot;.&quot;</span></span><br><span class="line">                        + random.nextInt(<span class="number">256</span>);</span><br><span class="line">                <span class="type">Long</span> <span class="variable">hll</span> <span class="operator">=</span> redisTemplate.opsForHyperLogLog().add(<span class="string">&quot;hll&quot;</span>,ip);</span><br><span class="line">                log.info(<span class="string">&quot;ip=&#123;&#125;，改ip访问首页的次数是&#123;&#125;&quot;</span>,ip,hll);</span><br><span class="line">                <span class="comment">//模拟用户访问</span></span><br><span class="line">                <span class="keyword">try</span> &#123;</span><br><span class="line">                    Thread.sleep(<span class="number">3000</span>);</span><br><span class="line">                &#125; <span class="keyword">catch</span> (InterruptedException e) &#123;</span><br><span class="line">                    <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(e);</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;,<span class="string">&quot;t1&quot;</span>).start();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> Long <span class="title function_">uv</span><span class="params">()</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> redisTemplate.opsForHyperLogLog().size(<span class="string">&quot;hll&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>HyperLogLogController</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.controller;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.service.HyperLogLogService;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.GetMapping;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.RestController;</span><br><span class="line"></span><br><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">HyperLogLogController</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> HyperLogLogService hyperLogLogService;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/uv&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Long <span class="title function_">uv</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> hyperLogLogService.uv();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>结果</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701171958060.png" alt="image-20250701171958060"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701172010589.png" alt="image-20250701172010589"></p>
+<h2 id="GEO"><a href="#GEO" class="headerlink" title="GEO"></a>GEO</h2><p>经纬度</p>
+<p>经度与纬度的合称组成一个坐标系统。又称为地理坐标系统，它是一种利用三度空间的球面来定义地球上的空间的球面坐标系统，能够标示地球上的任何一个位置。</p>
+<p>经线和纬线</p>
+<p>是人们为了在地球上确定位置和方向的，在地球仪和地图上画出来的，地面上并线。</p>
+<p>和经线相垂直的线叫做纬线(纬线指示东西方向)。纬线是一条条长度不等的圆圈。最长的纬线就是赤道。 </p>
+<p>因为经线指示南北方向，所以经线又叫子午线。 国际上规定，把通过英国格林尼治天文台原址的经线叫做0°所以经线也叫本初子午线。在地球上经线指示南北方向，纬线指示东西方向。</p>
+<p>东西半球分界线：东经160° 西经20°</p>
+<p>经度和维度</p>
+<p>经度(longitude)：<strong>东经为正数，西经为负数。东西经</strong></p>
+<p>纬度(latitude)：<strong>北纬为正数，南纬为负数。南北纬</strong></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701175834150.png" alt="image-20250701175834150"></p>
+<h3 id="命令"><a href="#命令" class="headerlink" title="命令"></a>命令</h3><h4 id="GEOADD添加经纬度坐标"><a href="#GEOADD添加经纬度坐标" class="headerlink" title="GEOADD添加经纬度坐标"></a><code>GEOADD</code>添加经纬度坐标</h4><p><img src="/hexo-docs/images/redisImages/image-20250701180309617.png" alt="image-20250701180309617"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180323735.png" alt="image-20250701180323735"></p>
+<p><code>GEOADD city 116.403963 39.915119 &quot;天安门&quot; 116.403414 39.924091 &quot;故宫&quot; 116.024067 40.362639 &quot;长城&quot;</code></p>
+<p>处理中文乱码</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701181926979.png" alt="image-20250701181926979"></p>
+<h4 id="GEOPOS返回经纬度"><a href="#GEOPOS返回经纬度" class="headerlink" title="GEOPOS返回经纬度"></a><code>GEOPOS</code>返回经纬度</h4><p><img src="/hexo-docs/images/redisImages/image-20250701180348924.png" alt="image-20250701180348924"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180356965.png" alt="image-20250701180356965"></p>
+<p><code>GEOPOS city 天安门 故宫</code></p>
+<h4 id="GEOHASH返回坐标的geohash表示"><a href="#GEOHASH返回坐标的geohash表示" class="headerlink" title="GEOHASH返回坐标的geohash表示"></a><code>GEOHASH</code>返回坐标的<code>geohash</code>表示</h4><p><code>geohash算法生成的base32编码值</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180431448.png" alt="image-20250701180431448"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180441115.png" alt="image-20250701180441115"></p>
+<p><code>GEOHASH city 天安门 故宫 长城</code></p>
+<h4 id="GEODIST两个位置之间的距离"><a href="#GEODIST两个位置之间的距离" class="headerlink" title="GEODIST两个位置之间的距离"></a><code>GEODIST</code>两个位置之间的距离</h4><p><img src="/hexo-docs/images/redisImages/image-20250701180528876.png" alt="image-20250701180528876"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180537106.png" alt="image-20250701180537106"></p>
+<p><code>GEODIST city 天安门 长城 km</code></p>
+<p>后面参数是距离单位：</p>
+<p>m 米</p>
+<p>km 千米</p>
+<p>ft 英尺</p>
+<p>mi 英里</p>
+<h4 id="GEORADIUS以半径为中心，查找附近的XXX"><a href="#GEORADIUS以半径为中心，查找附近的XXX" class="headerlink" title="GEORADIUS以半径为中心，查找附近的XXX"></a><code>GEORADIUS</code>以半径为中心，查找附近的XXX</h4><p><code>georadius</code>以给定的经纬度为中心， 返回键包含的位置元素当中， 与中心的距离不超过给定最大距离的所有位置元素。</p>
+<p><code>GEORADIUS city 116.418017 39.914402 10 km withdist withcoord count 10 withhash desc</code></p>
+<p><code>GEORADIUS city 116.418017 39.914402 10 km withdist withcoord count 10 desc</code></p>
+<p>WITHDIST: 在返回位置元素的同时， 将位置元素与中心之间的距离也一并返回。 距离的单位和用户给定的范围单位保持一致。</p>
+<p>WITHCOORD: 将位置元素的经度和维度也一并返回。</p>
+<p>WITHHASH: 以 52 位有符号整数的形式， 返回位置元素经过原始 geohash 编码的有序集合分值。 这个选项主要用于底层应用或者调试， 实际中的作用并不大</p>
+<p>COUNT 限定返回的记录数。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180712723.png" alt="image-20250701180712723"></p>
+<h4 id="GEORADIUSBYMEMBER"><a href="#GEORADIUSBYMEMBER" class="headerlink" title="GEORADIUSBYMEMBER"></a><code>GEORADIUSBYMEMBER</code></h4><p><img src="/hexo-docs/images/redisImages/image-20250701180726862.png" alt="image-20250701180726862"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701180734871.png" alt="image-20250701180734871"></p>
+<h3 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h3><p><code>GEOService</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.geo.*;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.connection.RedisGeoCommands;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.StringRedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.util.HashMap;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.Map;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">GEOService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">CITY</span> <span class="operator">=</span> <span class="string">&quot;city&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 添加经纬度坐标</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span> String</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">geoAdd</span><span class="params">()</span> &#123;</span><br><span class="line">        Map&lt;String, Point&gt; map = <span class="keyword">new</span> <span class="title class_">HashMap</span>&lt;&gt;();</span><br><span class="line">        map.put(<span class="string">&quot;天安门&quot;</span>, <span class="keyword">new</span> <span class="title class_">Point</span>(<span class="number">116.403963</span>, <span class="number">39.915119</span>));</span><br><span class="line">        map.put(<span class="string">&quot;故宫&quot;</span>, <span class="keyword">new</span> <span class="title class_">Point</span>(<span class="number">116.403414</span>, <span class="number">39.924091</span>));</span><br><span class="line">        map.put(<span class="string">&quot;长城&quot;</span>, <span class="keyword">new</span> <span class="title class_">Point</span>(<span class="number">116.024067</span>, <span class="number">40.362639</span>));</span><br><span class="line">        redisTemplate.opsForGeo().add(CITY, map);</span><br><span class="line">        <span class="keyword">return</span> map.toString();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 根据名称获得经纬度的坐标</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> member 地方名称</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span> Point</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> Point <span class="title function_">position</span><span class="params">(String member)</span>&#123;</span><br><span class="line">        List&lt;Point&gt; pointList = redisTemplate.opsForGeo().position(CITY, member);</span><br><span class="line">        <span class="keyword">if</span> (pointList != <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> pointList.get(<span class="number">0</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 根据名称获得 hash值</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> member 地方名称</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span> String</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">hash</span><span class="params">(String member)</span>&#123;</span><br><span class="line">        List&lt;String&gt; listHash = redisTemplate.opsForGeo().hash(CITY, member);</span><br><span class="line">        <span class="keyword">if</span> (listHash != <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="keyword">return</span> listHash.get(<span class="number">0</span>);</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> member;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 获得两个位置之间给定的距离公里</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> member1 地方名称1</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> member2 地方名称2</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span> Distance</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> Distance <span class="title function_">distance</span><span class="params">(String member1, String member2)</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> redisTemplate.opsForGeo().distance(CITY, member1, member2, Metrics.KILOMETERS);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 通过经度，纬度查找附近的,北京王府井位置116.418017,39.914402</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span> GeoResults</span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> GeoResults&lt;RedisGeoCommands.GeoLocation&lt;String&gt;&gt; resultsByMember()&#123;</span><br><span class="line">        <span class="type">Circle</span> <span class="variable">circle</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Circle</span>(<span class="number">116.418017</span>, <span class="number">39.914402</span>, Metrics.KILOMETERS.getMultiplier());</span><br><span class="line">        <span class="comment">//返回50条,升序</span></span><br><span class="line">        <span class="keyword">return</span> redisTemplate.opsForGeo().radius(CITY, circle, RedisGeoCommands.GeoRadiusCommandArgs</span><br><span class="line">                .newGeoRadiusArgs().includeDistance().includeCoordinates().sortAscending().limit(<span class="number">50</span>));</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>GEOController</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.controller;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.service.GEOService;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> jakarta.websocket.server.PathParam;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.geo.*;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.connection.RedisGeoCommands;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.GetMapping;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.RestController;</span><br><span class="line"></span><br><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">GEOController</span> &#123;</span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> GEOService geoService;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/add&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">geoAdd</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> geoService.geoAdd();</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/position&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Point <span class="title function_">position</span><span class="params">(<span class="meta">@PathParam(&quot;member&quot;)</span> String member)</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> geoService.position(member);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/hash&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> String <span class="title function_">hash</span><span class="params">(<span class="meta">@PathParam(&quot;member&quot;)</span>String member)</span>&#123;</span><br><span class="line">       <span class="keyword">return</span> geoService.hash(member);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/distance&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Distance <span class="title function_">distance</span><span class="params">(<span class="meta">@PathParam(&quot;member1&quot;)</span>String member1,<span class="meta">@PathParam(&quot;member2&quot;)</span> String member2)</span>&#123;</span><br><span class="line">        <span class="keyword">return</span> geoService.distance(member1, member2);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/resultsByMember&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> GeoResults&lt;RedisGeoCommands.GeoLocation&lt;String&gt;&gt; resultsByMember()&#123;</span><br><span class="line">        <span class="keyword">return</span> geoService.resultsByMember();</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>效果</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701184025361.png" alt="image-20250701184025361"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701184321171.png" alt="image-20250701184321171"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701184340915.png" alt="image-20250701184340915"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701184421375.png" alt="image-20250701184421375"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250701184523390.png" alt="image-20250701184523390"></p>
+<h2 id="bitmap"><a href="#bitmap" class="headerlink" title="bitmap"></a>bitmap</h2><p>由0和1状态表现的二进制的bit数组</p>
+<ul>
+<li>能干嘛<ul>
+<li>用于状态统计</li>
+</ul>
+</li>
+</ul>
+<p>命令</p>
+<ul>
+<li><p><code>setbit</code></p>
+<ul>
+<li><img src="/hexo-docs/images/redisImages/image-20250703111837545.png" alt="image-20250703111837545"></li>
+<li><code>setbit 键 偏移位 只能零或者1</code></li>
+</ul>
+<p>Bitmap的偏移量是从零开始算的</p>
+<ul>
+<li><p><code>gitbit key offset</code></p>
+</li>
+<li><p><code>setbit</code>和<code>gitbit</code>案例说明</p>
+<ul>
+<li>按天</li>
+</ul>
+<p>  <img src="/hexo-docs/images/redisImages/image-20250703112136942.png" alt="image-20250703112136942"></p>
+<ul>
+<li><p>按照年</p>
+<ul>
+<li><p>按年去存储一个用户的签到情况，365 天只需要 365 &#x2F; 8 ≈ 46 Byte，1000W 用户量一年也只需要 44 MB 就足够了。</p>
+<p>假如是亿级的系统，</p>
+<p>每天使用1个1亿位的Bitmap约占12MB的内存（10^8&#x2F;8&#x2F;1024&#x2F;1024），10天的Bitmap的内存开销约为120MB，内存压力不算太高。在实际使用时，最好对Bitmap设置过期时间，让Redis自动删除不再需要的签到记录以节省内存开销。</p>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><p><code>strlen</code>：统计字节数占用多少</p>
+<ul>
+<li><img src="/hexo-docs/images/redisImages/image-20250703112416306.png" alt="image-20250703112416306"></li>
+<li>不是字符串长度而是占据几个字节，超过8位后自己按照8位一组一byte再扩容</li>
+</ul>
+</li>
+<li><p><code>bitcount</code></p>
+<ul>
+<li><p>全部键里面含有1的有多少个？</p>
+<ul>
+<li><img src="/hexo-docs/images/redisImages/image-20250703112506864.png" alt="image-20250703112506864"></li>
+</ul>
+</li>
+<li><p>一年365天，全年天天登陆占用多少字节</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250703112549848.png" alt="image-20250703112549848"></p>
+</li>
+</ul>
+</li>
+<li><p><code>bitop</code></p>
+<ul>
+<li><p>连续2天都签到的用户</p>
+<p>加入某个网站或者系统，它的用户有1000W，做个用户id和位置的映射</p>
+<p>比如0号位对应用户id：uid-092iok-lkj</p>
+<p>比如1号位对应用户id：uid-7388c-xxx</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250703112629437.png" alt="image-20250703112629437"></p>
+</li>
+</ul>
+</li>
+</ul>
+<h2 id="布隆过滤器"><a href="#布隆过滤器" class="headerlink" title="布隆过滤器"></a>布隆过滤器</h2><p>由一个初值都为零的bit数组和多个哈希函数构成，用来快速判断集合中是否存在某个元素</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250703112915859.png" alt="image-20250703112915859"></p>
+<ul>
+<li><p>设计思想：</p>
+<ul>
+<li>本质就是判断具体数据是否存在于一个大的集合中</li>
+</ul>
+</li>
+<li><p>备注</p>
+<ul>
+<li><p>布隆过滤器是一种类似<span style="color:#CC0000;">set的数据结构</span>，只是统计结果在巨量数据下有点瑕疵，不够完美。</p>
+</li>
+<li><p>布隆过滤器（英语：Bloom Filter）是 1970 年由布隆提出的。</p>
+<p>它实际上是一个很长的二进制数组(00000000)+一系列随机hash算法映射函数，主要用于判断一个元素是否在集合中。</p>
+<p>通常我们会遇到很多要判断一个元素是否在某个集合中的业务场景，一般想到的是将集合中所有元素保存起来，然后通过比较确定。</p>
+<p>链表、树、哈希表等等数据结构都是这种思路。但是随着集合中元素的增加，我们需要的存储空间也会呈现线性增长，最终达到瓶颈。同时检索速度也越来越慢，上述三种结构的检索时间复杂度分别为O(n),O(logn),O(1)。这个时候，布隆过滤器（Bloom Filter）就应运而生</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250703113110565.png" alt="image-20250703113110565"></p>
+</li>
+</ul>
+</li>
+</ul>
+<p>布隆过滤器高效地插入和查询，占用空间少，返回的结果是不够确定+不够完美</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250703112915859.png" alt="image-20250703112915859"></p>
+<table>
+<thead>
+<tr>
+<th align="center">目的</th>
+<th align="center">减少内存占用</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">方式</td>
+<td align="center">不保存数据信息，只是在内存中做一个是否存在的标记flag</td>
+</tr>
+</tbody></table>
+<p>一个元素如果判断结果：存在时，元素不一定存在，但是判断结果为不存在时，则一定不存在。</p>
+<p>布隆过滤器可以添加元素，但是不能删除元素，由于设计<code>hashcode</code>判断依据，删掉元素会导致误判率增加。</p>
+<blockquote>
+<ul>
+<li>总结：</li>
+<li>有，是可能有</li>
+<li>无，是肯定无<ul>
+<li>可以保证的是，如果布隆过滤器判断一个元素不在一个集合中，那这个元素一定不会在集合中</li>
+</ul>
+</li>
+</ul>
+</blockquote>
+<p>原理：<a target="_blank" rel="noopener" href="https://blog.csdn.net/qq_41125219/article/details/119982158">布隆(Bloom Filter)过滤器——全面讲解，建议收藏-CSDN博客</a></p>
+<p>使用场景</p>
+<ul>
+<li><p>解决缓存穿透的问题，和<code>redis</code>集合<code>bitmap</code>使用</p>
+</li>
+<li><p>黑名单校验，识别垃圾邮件</p>
+<ul>
+<li><p>发现存在黑名单中的，就执行特定操作。比如：识别垃圾邮件，只要是邮箱在黑名单中的邮件，就识别为垃圾邮件。</p>
+<p>假设黑名单的数量是数以亿计的，存放起来就是非常耗费存储空间的，布隆过滤器则是一个较好的解决方案。</p>
+<p>把所有黑名单都放在布隆过滤器中，在收到邮件时，判断邮件地址是否在布隆过滤器中即可。</p>
+</li>
+</ul>
+</li>
+<li><p>安全连接网址，全球上10亿的网址判断</p>
+</li>
+</ul>
+<p>案例：</p>
+<p>白名单的可以访问，不在白名单的不能访问</p>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-web<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- lombok --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.projectlombok<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>lombok<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- redis --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-data-redis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- 连接池 --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.commons<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>commons-pool2<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!--Mysql数据库驱动--&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>mysql<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mysql-connector-java<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>5.1.47<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!--SpringBoot集成druid连接池--&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.alibaba<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>druid-spring-boot-starter<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.1.10<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!-- mybatis --&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.mybatis.spring.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mybatis-spring-boot-starter<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>3.0.4<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="comment">&lt;!--通用Mapper--&gt;</span></span><br><span class="line"><span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>tk.mybatis<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mapper<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">version</span>&gt;</span>4.1.5<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br></pre></td></tr></table></figure>
+
+<p><code>yaml</code></p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">server:</span></span><br><span class="line">  <span class="attr">port:</span> <span class="number">8080</span></span><br><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">datasource:</span></span><br><span class="line">    <span class="attr">type:</span> <span class="string">com.alibaba.druid.pool.DruidDataSource</span></span><br><span class="line">    <span class="attr">username:</span> <span class="string">root</span></span><br><span class="line">    <span class="attr">password:</span> <span class="string">root</span></span><br><span class="line">    <span class="attr">url:</span> <span class="string">jdbc:mysql://localhost:3306/db01?useUnicode=true&amp;characterEncoding=utf-8&amp;useSSL=false</span></span><br><span class="line">    <span class="attr">druid:</span></span><br><span class="line">      <span class="attr">test-while-idle:</span> <span class="literal">false</span></span><br><span class="line">    <span class="attr">driver-class-name:</span> <span class="string">com.mysql.jdbc.Driver</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">Redis7_study</span></span><br><span class="line">  <span class="attr">swagger2:</span></span><br><span class="line">    <span class="attr">enable:</span> <span class="literal">true</span> <span class="comment"># 是否开启swagger</span></span><br><span class="line">  <span class="attr">data:</span></span><br><span class="line">    <span class="attr">redis:</span></span><br><span class="line">      <span class="attr">host:</span> <span class="number">192.168</span><span class="number">.0</span><span class="number">.133</span> <span class="comment"># redis IP 地址</span></span><br><span class="line">      <span class="attr">database:</span> <span class="number">0</span> <span class="comment"># redis 0号数据库</span></span><br><span class="line">      <span class="attr">port:</span> <span class="number">6379</span> <span class="comment"># redis 端口</span></span><br><span class="line">      <span class="attr">password:</span> <span class="string">redis</span> <span class="comment"># redis 密码</span></span><br><span class="line"><span class="attr">mybatis:</span></span><br><span class="line">  <span class="attr">type-aliases-package:</span> <span class="string">com.lazy.pojo</span></span><br><span class="line">  <span class="attr">configuration:</span></span><br><span class="line">    <span class="attr">map-underscore-to-camel-case:</span> <span class="literal">true</span></span><br><span class="line">  <span class="attr">mapper-locations:</span> <span class="string">classpath:mapper/*.xml</span></span><br></pre></td></tr></table></figure>
+
+<p><code>实体类</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.pojo;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> lombok.Data;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> javax.persistence.Id;</span><br><span class="line"><span class="keyword">import</span> javax.persistence.Table;</span><br><span class="line"><span class="keyword">import</span> java.util.Date;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Data</span></span><br><span class="line"><span class="meta">@Table(name = &quot;t_customer&quot;)</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">Customer</span> &#123;</span><br><span class="line">    <span class="meta">@Id</span></span><br><span class="line">    <span class="keyword">private</span> Integer id;</span><br><span class="line">    <span class="keyword">private</span> String cname;</span><br><span class="line">    <span class="keyword">private</span> Integer age;</span><br><span class="line">    <span class="keyword">private</span> String phone;</span><br><span class="line">    <span class="keyword">private</span> Boolean sex;</span><br><span class="line">    <span class="keyword">private</span> Date birth;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>service</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.service;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.mapper.CustomerMapper;</span><br><span class="line"><span class="keyword">import</span> com.lazy.pojo.Customer;</span><br><span class="line"><span class="keyword">import</span> com.lazy.utlis.CheckUtils;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Service;</span><br><span class="line"></span><br><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CustomerService</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> CustomerMapper customerMapper;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String, Object&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">CUSTOMER_KEY</span> <span class="operator">=</span> <span class="string">&quot;customer:&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> CheckUtils checkUtils;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">void</span> <span class="title function_">addCustomer</span><span class="params">(Customer customer)</span> &#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">result</span> <span class="operator">=</span> customerMapper.insert(customer);</span><br><span class="line">        <span class="keyword">if</span> (result &gt; <span class="number">0</span>) &#123;</span><br><span class="line">            customer  = customerMapper.selectByPrimaryKey(customer.getId());</span><br><span class="line">            redisTemplate.opsForValue().set(CUSTOMER_KEY + customer.getId(), customer);</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> Customer <span class="title function_">findCustomerById</span><span class="params">(Integer id)</span> &#123;</span><br><span class="line">        Customer customer;</span><br><span class="line">        customer = (Customer) redisTemplate.opsForValue().get(CUSTOMER_KEY + id);</span><br><span class="line">        <span class="keyword">if</span> (customer == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="comment">//缓存没有,查询数据库</span></span><br><span class="line">            customer = customerMapper.selectByPrimaryKey(id);</span><br><span class="line">            <span class="keyword">if</span> (customer != <span class="literal">null</span>) &#123;</span><br><span class="line">                <span class="comment">//缓存有，缓存到redis中</span></span><br><span class="line">                redisTemplate.opsForValue().set(CUSTOMER_KEY + id, customer);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> customer;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> Customer <span class="title function_">findCustomerByIdWithBloomFilter</span><span class="params">(Integer id)</span> &#123;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> CUSTOMER_KEY + id;</span><br><span class="line">        Customer customer;</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span> (!checkUtils.checkWithBloomFilter(<span class="string">&quot;whitelistCustomer&quot;</span>, key))&#123;</span><br><span class="line">            log.info(<span class="string">&quot;白名单暂无此信息：&#123;&#125;&quot;</span>,key);</span><br><span class="line">            <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">        &#125;</span><br><span class="line">        customer = (Customer) redisTemplate.opsForValue().get(key);</span><br><span class="line">        <span class="keyword">if</span> (customer == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="comment">//缓存没有,查询数据库</span></span><br><span class="line">            customer = customerMapper.selectByPrimaryKey(id);</span><br><span class="line">            <span class="keyword">if</span> (customer != <span class="literal">null</span>) &#123;</span><br><span class="line">                <span class="comment">//缓存有，缓存到redis中</span></span><br><span class="line">                redisTemplate.opsForValue().set(CUSTOMER_KEY + id, customer);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> customer;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p><code>controller</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.controller;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.lazy.pojo.Customer;</span><br><span class="line"><span class="keyword">import</span> com.lazy.service.CustomerService;</span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.GetMapping;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.PathVariable;</span><br><span class="line"><span class="keyword">import</span> org.springframework.web.bind.annotation.RestController;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> java.time.LocalDateTime;</span><br><span class="line"><span class="keyword">import</span> java.time.ZoneId;</span><br><span class="line"><span class="keyword">import</span> java.util.Date;</span><br><span class="line"><span class="keyword">import</span> java.util.Random;</span><br><span class="line"><span class="keyword">import</span> java.util.UUID;</span><br><span class="line"></span><br><span class="line"><span class="meta">@RestController</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CustomerController</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> CustomerService customerService;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/customer/add&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Customer <span class="title function_">addCustomer</span><span class="params">()</span> &#123;</span><br><span class="line">        <span class="type">Customer</span> <span class="variable">customer</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">Customer</span>();</span><br><span class="line">        customer.setId(<span class="number">1</span>);</span><br><span class="line">        customer.setAge(<span class="keyword">new</span> <span class="title class_">Random</span>().nextInt(<span class="number">60</span>));</span><br><span class="line">        customer.setSex(<span class="literal">true</span>);</span><br><span class="line">        customer.setPhone(<span class="string">&quot;131412421&quot;</span>);</span><br><span class="line">        customer.setCname(<span class="string">&quot;zs&quot;</span>);</span><br><span class="line">        customer.setBirth(Date.from(LocalDateTime.now().atZone(ZoneId.systemDefault()).toInstant()));</span><br><span class="line">        customerService.addCustomer(customer);</span><br><span class="line">        <span class="keyword">return</span> customer;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/customer/get/&#123;id&#125;&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Customer <span class="title function_">getCustomerById</span><span class="params">(<span class="meta">@PathVariable</span> Integer id)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> customerService.findCustomerById(id);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@GetMapping(&quot;/customerWithBloomFilter/get/&#123;id&#125;&quot;)</span></span><br><span class="line">    <span class="keyword">public</span> Customer <span class="title function_">getCustomerByIdWithBloomFilter</span><span class="params">(<span class="meta">@PathVariable</span> Integer id)</span> &#123;</span><br><span class="line">        <span class="keyword">return</span> customerService.findCustomerByIdWithBloomFilter(id);</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<p>检查是否是在白名单工具类</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.utlis;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> jakarta.annotation.Resource;</span><br><span class="line"><span class="keyword">import</span> lombok.extern.slf4j.Slf4j;</span><br><span class="line"><span class="keyword">import</span> org.springframework.data.redis.core.RedisTemplate;</span><br><span class="line"><span class="keyword">import</span> org.springframework.stereotype.Component;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * 检查是否有白名单</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="meta">@Component</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">CheckUtils</span> &#123;</span><br><span class="line"></span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate&lt;String, Object&gt; redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> Boolean <span class="title function_">checkWithBloomFilter</span><span class="params">(String checkItem,String key)</span>&#123;</span><br><span class="line">        <span class="type">int</span> <span class="variable">hashValue</span> <span class="operator">=</span> Math.abs(key.hashCode());<span class="comment">//获得hashcode值</span></span><br><span class="line">        <span class="type">long</span> <span class="variable">index</span> <span class="operator">=</span> (<span class="type">long</span>)(hashValue % Math.pow(<span class="number">2</span>,<span class="number">32</span>));<span class="comment">//得到对应槽位，2的32次方是int类型</span></span><br><span class="line">        <span class="type">Boolean</span> <span class="variable">existOk</span> <span class="operator">=</span> redisTemplate.opsForValue().getBit(checkItem, index);</span><br><span class="line">        log.info(<span class="string">&quot;key：&#123;&#125;,对应的坑位是：&#123;&#125;,是否存在:&#123;&#125;&quot;</span>,key,index,existOk);</span><br><span class="line">        <span class="keyword">return</span> existOk;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs">Lazy</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/">https://mac2git.github.io/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://mac2git.github.io/hexo-docs" target="_blank">Lazy的个人博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/hexo-docs/tags/Redis/">Redis</a></div><div class="post-share"><div class="social-share" data-image="https://pic.crazytaxii.com/Redis_Logo.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/pub&amp;sub/" title="pub&amp;sub(发布&amp;订阅)"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">pub&sub(发布&订阅)</div></div><div class="info-2"><div class="info-item-1">发布&#x2F;订阅是一种消息通信模式：发送者（publish）发送消息，订阅者（subscribe）接受消息，可以实现进程间的消息传递 Redis  可以实现消息中间件 MQ 的功能，通过发布订阅实现消息的引导和分流。不推荐使用该功能，专业的事情交给专业的中间件，redis就做好分布式缓存功能 能干嘛？  redis 客户端可以订阅任意数量的频道，类似我们微信关注多个公众号   当有新的消息通过 publish 命令发送给频道 channel1 时     总结： 发布&#x2F;订阅其实是一个轻量的队列，只不过数据不会被持久化，一般用来处理实时性较高的异步消息    常用命令  subscribe channel [channel...]   订阅给定的一个或多个频道的信息 推荐先执行订阅后再发布，订阅成功之前发布的消息是收不到的 订阅的客户端每次可以收到一个3个参数的消息 消息的种类 始发频道的名称 实际的消息内容         publish channel message    发布消息到指定的频道    psubscribe pattern[pattern...] ...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">epoll函数和IO多路复用深度解析</div></div><div class="info-2"><div class="info-item-1">epoll 函数和 IO 多路复用深度解析没有 epoll 和 IO 多路复用之前多路复用要解决的问题并发多客户端连接，在多路复用之前最简单和典型的方案：同步阻塞网络IO模型 这种模式的特点就是用一个进程来处理一个网络连接(一个用户请求)，比如一段典型的示例代码如下。 直接调用 recv 函数从一个 socket 上读取数据。 int main()&#123; ... recv(sock, ...) //从用户角度来看非常简单，一个recv一用，要接收的数据就到我们手里了。&#125;  我们来总结一下这种方式： 优点： 就是这种方式非常容易让人理解，写起代码来非常的自然，符合人的直线型思维。 缺点： 就是性能差，每个用户请求到来都得占用一个进程来处理，来一个请求就要分配一个进程跟进处理， 类似一个学生配一个老师，一位患者配一个医生，可能吗？进程是一个很笨重的东西。一台服务器上创建不了多少个进程。 结论进程在 Linux 上是一个开销不小的家伙，先不说创建，光是上下文切换一次就得几个微秒。所以为了高效地对海量用户提供服务，必须要让一个进程能同时处理很多个 tcp 连接才行。现在假...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RedLock算法和底层源码分析和缓存淘汰策略</div></div><div class="info-2"><div class="info-item-1">上一章自研的redis锁对于一般中小公司，不是特别高并发场景足够用了，单机redis小业务也撑得住。但是对于特别高并发场景的话，就得使用Redisson了 Redis分布式锁-RedLock红锁算法（Distributed locks with Redis）官网：Redis 的分布式锁 |文档 说明：  为什么学习这个？怎样产生的？   线程 1 首先获取锁成功，将键值对写入 redis 的 master 节点，在 redis 将该键值对同步到 slave 节点之前，master 发生了故障；redis 触发故障转移，其中一个 slave 升级为新的 master，此时新上位的master并不包含线程1写入的键值对，因此线程 2 尝试获取锁也可以成功拿到锁，此时相当于有两个线程获取到了锁，可能会导致各种预期之外的情况发生，例如最常见的脏数据。  我们加的是排它独占锁，同一时间只能有一个建redis锁成功并持有锁，严禁出现2个以上的请求线程拿到锁。危险的！ RedLock算法设计理念Redis也提供了Redlock算法，用来实现基于多个实例的分布式锁。锁变量由多个实例维护，即使有实...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RDB+AOF</div></div><div class="info-2"><div class="info-item-1">redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 RDB（Redis 数据库）：RDB 持久性以指定的时间间隔执行数据集的时间点快照。  rdb（redis database）能干嘛？ 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot内存快照，它恢复时再将硬盘快照文件直接读回到内存里。Redis的数据都在内存中，保存备份时它执行的是全量快照，也就是说，把内存中的所有数据都记录到磁盘中，一锅端。 Rdb保存的是dump.rdb文件  Redis6.0.16以下  Redis6.2以及Redis-7.0.0  自动触发 redis7版本，按照redis.conf里配置的save&lt;seconds&gt;&lt...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">BigKey和缓存双写</div></div><div class="info-2"><div class="info-item-1">Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。—貌似  2020年5月版本的6.0.x后及2022年出的7.0版本后，告别了大家印象中的单线程，用一种全新的多线程来解决问题。—实锤   几个里程碑的redis版本！  5.0版本是直接升级到6.0版本，对于这个激进的升级，Redis之父antirez表现得很有信心和兴奋， 所以第一时间发文来阐述6.0的一些重大功能”Redis 6.0.0 GA is out!” 当然，Redis7.0后版本更加厉害  Redis是单线程 主要是指Redis的网络IO和键值对读写是由一个线程来完成的，Redis在处理客户端的请求时包括获取 (socket 读)、解析、执行、内容返回 (socket 写...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">Redis基础</div></div><div class="info-2"><div class="info-item-1">什么是Redis？Redis 是一个内存数据存储，被数百万开发者用作缓存、向量数据库、文档数据库、流式引擎和消息代理。Redis 具有内置的复制和不同级别的磁盘持久化。它支持复杂的数据类型（例如，字符串、散列、列表、集合、有序集合和 JSON），并为这些数据类型定义了原子操作。 Redis 通常被称为数据结构服务器。这意味着 Redis 通过一组命令提供对可变数据结构的访问，这些命令通过 TCP 套接字和简单协议使用服务器-客户端模型发送。因此，不同的进程可以以共享的方式查询和修改相同的数据结构。 Redis 实现的数据结构具有一些特殊的属性：  Redis 会将其存储在磁盘上，即使它们总是被服务器内存中读取和修改。这意味着 Redis 速度快，但同时也非易失性。 数据结构的实现强调内存效率，因此 Redis 内部的数据结构可能比使用高级编程语言建模的相同数据结构模型使用更少的内存。 Redis 提供了一系列数据库中常见的功能，如复制、可调的持久性级别、集群和高度可用性。  下载Redis 命名规则： ​	版本号第二位如果是奇数，则为非稳定版本，如2.7、2.9、3.1 ​	版本...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">epoll函数和IO多路复用深度解析</div></div><div class="info-2"><div class="info-item-1">epoll 函数和 IO 多路复用深度解析没有 epoll 和 IO 多路复用之前多路复用要解决的问题并发多客户端连接，在多路复用之前最简单和典型的方案：同步阻塞网络IO模型 这种模式的特点就是用一个进程来处理一个网络连接(一个用户请求)，比如一段典型的示例代码如下。 直接调用 recv 函数从一个 socket 上读取数据。 int main()&#123; ... recv(sock, ...) //从用户角度来看非常简单，一个recv一用，要接收的数据就到我们手里了。&#125;  我们来总结一下这种方式： 优点： 就是这种方式非常容易让人理解，写起代码来非常的自然，符合人的直线型思维。 缺点： 就是性能差，每个用户请求到来都得占用一个进程来处理，来一个请求就要分配一个进程跟进处理， 类似一个学生配一个老师，一位患者配一个医生，可能吗？进程是一个很笨重的东西。一台服务器上创建不了多少个进程。 结论进程在 Linux 上是一个开销不小的家伙，先不说创建，光是上下文切换一次就得几个微秒。所以为了高效地对海量用户提供服务，必须要让一个进程能同时处理很多个 tcp 连接才行。现在假...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/pub&sub/" title="pub&amp;sub(发布&amp;订阅)"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">pub&amp;sub(发布&amp;订阅)</div></div><div class="info-2"><div class="info-item-1">发布&#x2F;订阅是一种消息通信模式：发送者（publish）发送消息，订阅者（subscribe）接受消息，可以实现进程间的消息传递 Redis  可以实现消息中间件 MQ 的功能，通过发布订阅实现消息的引导和分流。不推荐使用该功能，专业的事情交给专业的中间件，redis就做好分布式缓存功能 能干嘛？  redis 客户端可以订阅任意数量的频道，类似我们微信关注多个公众号   当有新的消息通过 publish 命令发送给频道 channel1 时     总结： 发布&#x2F;订阅其实是一个轻量的队列，只不过数据不会被持久化，一般用来处理实时性较高的异步消息    常用命令  subscribe channel [channel...]   订阅给定的一个或多个频道的信息 推荐先执行订阅后再发布，订阅成功之前发布的消息是收不到的 订阅的客户端每次可以收到一个3个参数的消息 消息的种类 始发频道的名称 实际的消息内容         publish channel message    发布消息到指定的频道    psubscribe pattern[pattern...] ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BB%9F%E8%AE%A1%E7%B1%BB%E5%9E%8B%E6%9C%89%E5%93%AA%E4%BA%9B%EF%BC%9F"><span class="toc-number">1.</span> <span class="toc-text">统计类型有哪些？</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HyperLogLog"><span class="toc-number">2.</span> <span class="toc-text">HyperLogLog</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E9%9C%80%E6%B1%82"><span class="toc-number">3.</span> <span class="toc-text">需求</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HyperLogLog%E6%98%AF%E4%BB%80%E4%B9%88%EF%BC%9F"><span class="toc-number">4.</span> <span class="toc-text">HyperLogLog是什么？</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%8E%9F%E7%90%86%E8%AF%B4%E6%98%8E"><span class="toc-number">4.1.</span> <span class="toc-text">原理说明</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#HyperLogLog-%E6%A1%88%E4%BE%8B"><span class="toc-number">5.</span> <span class="toc-text">HyperLogLog 案例</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#GEO"><span class="toc-number">6.</span> <span class="toc-text">GEO</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E5%91%BD%E4%BB%A4"><span class="toc-number">6.1.</span> <span class="toc-text">命令</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#GEOADD%E6%B7%BB%E5%8A%A0%E7%BB%8F%E7%BA%AC%E5%BA%A6%E5%9D%90%E6%A0%87"><span class="toc-number">6.1.1.</span> <span class="toc-text">GEOADD添加经纬度坐标</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#GEOPOS%E8%BF%94%E5%9B%9E%E7%BB%8F%E7%BA%AC%E5%BA%A6"><span class="toc-number">6.1.2.</span> <span class="toc-text">GEOPOS返回经纬度</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#GEOHASH%E8%BF%94%E5%9B%9E%E5%9D%90%E6%A0%87%E7%9A%84geohash%E8%A1%A8%E7%A4%BA"><span class="toc-number">6.1.3.</span> <span class="toc-text">GEOHASH返回坐标的geohash表示</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#GEODIST%E4%B8%A4%E4%B8%AA%E4%BD%8D%E7%BD%AE%E4%B9%8B%E9%97%B4%E7%9A%84%E8%B7%9D%E7%A6%BB"><span class="toc-number">6.1.4.</span> <span class="toc-text">GEODIST两个位置之间的距离</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#GEORADIUS%E4%BB%A5%E5%8D%8A%E5%BE%84%E4%B8%BA%E4%B8%AD%E5%BF%83%EF%BC%8C%E6%9F%A5%E6%89%BE%E9%99%84%E8%BF%91%E7%9A%84XXX"><span class="toc-number">6.1.5.</span> <span class="toc-text">GEORADIUS以半径为中心，查找附近的XXX</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#GEORADIUSBYMEMBER"><span class="toc-number">6.1.6.</span> <span class="toc-text">GEORADIUSBYMEMBER</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B"><span class="toc-number">6.2.</span> <span class="toc-text">案例</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#bitmap"><span class="toc-number">7.</span> <span class="toc-text">bitmap</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E5%B8%83%E9%9A%86%E8%BF%87%E6%BB%A4%E5%99%A8"><span class="toc-number">8.</span> <span class="toc-text">布隆过滤器</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix"><img src="https://spring.io/img/projects/spring-cloud.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Netflix"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix">SpringCloud Netflix</a><time datetime="2025-08-23T16:00:00.000Z" title="发表于 2025-08-24 00:00:00">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第二章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章">SpringCloud Alibaba 第二章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第三章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章">SpringCloud Alibaba 第三章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: true,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>

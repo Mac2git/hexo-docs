@@ -1,0 +1,789 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>BigKey和缓存双写 | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。">
+<meta property="og:type" content="article">
+<meta property="og:title" content="BigKey和缓存双写">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://pic.crazytaxii.com/Redis_Logo.png">
+<meta property="article:published_time" content="2025-08-12T16:00:00.000Z">
+<meta property="article:modified_time" content="2025-08-22T17:03:16.319Z">
+<meta property="article:author" content="Lazy">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic.crazytaxii.com/Redis_Logo.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "BigKey和缓存双写",
+  "url": "https://mac2git.github.io/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/",
+  "image": "https://pic.crazytaxii.com/Redis_Logo.png",
+  "datePublished": "2025-08-12T16:00:00.000Z",
+  "dateModified": "2025-08-22T17:03:16.319Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lazy",
+      "url": "https://mac2git.github.io/hexo-docs"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'BigKey和缓存双写',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(https://pic.crazytaxii.com/Redis_Logo.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a><a class="nav-page-title" href="/hexo-docs/"><span class="site-name">BigKey和缓存双写</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">BigKey和缓存双写</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-08-22T17:03:16.319Z" title="更新于 2025-08-23 01:03:16">2025-08-23</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Redis/">后端 Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">6.9k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>25分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="Redis为什么是单线程"><a href="#Redis为什么是单线程" class="headerlink" title="Redis为什么是单线程"></a>Redis为什么是单线程</h2><p>这种问法其实并不严谨，为啥这么说呢?</p>
+<p>Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。</p>
+<ol>
+<li><p>版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。</p>
+</li>
+<li><p>版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。—貌似</p>
+</li>
+<li><p>2020年5月版本的6.0.x后及2022年出的7.0版本后，告别了大家印象中的单线程，用一种全新的多线程来解决问题。—实锤</p>
+</li>
+</ol>
+<p>几个里程碑的redis版本！</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250628182302953.png" alt="image-20250628182302953"></p>
+<p>5.0版本是直接升级到6.0版本，对于这个激进的升级，Redis之父antirez表现得很有信心和兴奋，</p>
+<p>所以第一时间发文来阐述6.0的一些重大功能”Redis 6.0.0 GA is out!”</p>
+<p>当然，Redis7.0后版本更加厉害</p>
+<ul>
+<li>Redis是单线程<ul>
+<li>主要是指Redis的网络IO和键值对读写是由一个线程来完成的，Redis在处理客户端的请求时包括获取 (socket 读)、解析、执行、内容返回 (socket 写) 等都由一个顺序串行的主线程处理，这就是所谓的“单线程”。这也是Redis对外提供键值存储服务的主要流程。</li>
+</ul>
+</li>
+</ul>
+<p><img src="/hexo-docs/images/redisImages/image-20250628182400234.png" alt="image-20250628182400234"></p>
+<p>但Redis的其他功能，比如持久化RDB、AOF、异步删除、集群数据同步等等，其实是由额外的线程执行的。</p>
+<p>Redis命令工作线程是单线程的，但是，整个Redis来说，是多线程的；</p>
+<blockquote>
+<p><code>redis</code>为什么是单线程的？</p>
+<p>​	<code>redis</code>4之前一直都是单线程，redis4之后陆续加入多线程</p>
+</blockquote>
+<p>简单来说，Redis4.0之前一直采用单线程的主要原因有以下三个：</p>
+<ol>
+<li>使用单线程模型是 Redis 的开发和维护更简单，因为单线程模型方便开发和调试；</li>
+<li>即使使用单线程模型也并发的处理多客户端的请求，主要使用的是IO多路复用和非阻塞IO；</li>
+<li>对于Redis系统来说，主要的性能瓶颈是内存或者网络带宽而并非 CPU。</li>
+</ol>
+<p>既然单线程那么好，为什么还要引入多线程特性？</p>
+<p>​	正常情况下使用 del 指令可以很快的删除数据，而当被删除的 key 是一个非常大的对象时，例如时包含了成千上万个元素的 hash 集合时，那么 del 指令就会造成 Redis 主线程卡顿。</p>
+<p>​	这就是redis3.x单线程时代最经典的故障，大key删除的头疼问题，</p>
+<p>​	由于redis是单线程的，del bigKey …..</p>
+<p>​	等待很久这个线程才会释放，类似加了一个synchronized锁，你可以想象高并发下，程序堵成什么样子？</p>
+<p>如何解决？</p>
+<p>比如当我（Redis）需要删除一个很大的数据时，因为是单线程原子命令操作，这就会导致 Redis 服务卡顿，</p>
+<p>于是在 Redis 4.0 中就新增了多线程的模块，当然此版本中的多线程主要是为了解决删除数据效率比较低的问题的。</p>
+<table>
+<thead>
+<tr>
+<th align="left">unlink key</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left">flushdb async</td>
+</tr>
+<tr>
+<td align="left">flushall async</td>
+</tr>
+<tr>
+<td align="left">把删除工作交给了后台的小弟（子线程）异步来删除数据了。</td>
+</tr>
+</tbody></table>
+<p>因为Redis是单个主线程处理，redis之父antirez一直强调”Lazy Redis is better Redis”.</p>
+<p>而lazy free的本质就是把某些cost(主要时间复制度，占用主线程cpu时间片)较高删除操作，</p>
+<p>从redis主线程剥离让bio子线程来处理，极大地减少主线阻塞时间。从而减少删除导致性能和稳定性问题。</p>
+<p>redis7是否启用多线程？</p>
+<p>Redis7将所有数据放在内存中，内存的响应时长大约为100纳秒，对于小数据包，Redis服务器可以处理8W到10W的QPS，</p>
+<p>这也是Redis处理的极限了，对于80%的公司来说，单线程的Redis已经足够使用了。</p>
+<p>在Redis6.0及7后，多线程机制默认是关闭的，如果需要使用多线程功能，需要在redis.conf中完成两个设置</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629160220758.png" alt="image-20250629160220758"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629160236686.png" alt="image-20250629160236686"></p>
+<ol>
+<li><p>设置io-thread-do-reads配置项为yes，表示启动多线程。</p>
+</li>
+<li><p>设置线程个数。关于线程数的设置，官方的建议是如果为 4 核的 CPU，建议线程数设置为 2 或 3，如果为 8 核 CPU 建议线程数设置为 6，线程数一定要小于机器核数，线程数并不是越大越好。</p>
+</li>
+</ol>
+<h2 id="BigKey"><a href="#BigKey" class="headerlink" title="BigKey"></a>BigKey</h2><p>多大的key才算<code>bigKey</code>?</p>
+<p>阿里云开发规范</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250628182947629.png" alt="image-20250628182947629"></p>
+<h3 id="String和二级结构"><a href="#String和二级结构" class="headerlink" title="String和二级结构"></a>String和二级结构</h3><ol>
+<li>string是value，最大512MB但是&gt;&#x3D;10KB就是bigkey</li>
+<li>list、hash、set、和zset，个数超过5000就是bigkey<ol>
+<li><p>list</p>
+<p>一个列表最多可以包含2的32次方-1个元素（4294967295，每个列表超过40亿个元素）</p>
+</li>
+<li><p>hash</p>
+<p>Redis中每个hash可以存储2的32次方-1键值对（40多亿）</p>
+</li>
+<li><p>set</p>
+<p>集合中最大的成员数2的32次方-1（4294967295，每个集合可存储40多亿个成员）</p>
+</li>
+</ol>
+</li>
+</ol>
+<h3 id="案例"><a href="#案例" class="headerlink" title="案例"></a>案例</h3><p>大批量往redis里插入100w测试数据key</p>
+<ol>
+<li><p>在linux bash下面执行，插入100w<img src="/hexo-docs/images/redisImages/image-20250629160602408.png" alt="image-20250629160602408"></p>
+<figure class="highlight c"><table><tr><td class="code"><pre><span class="line"># 生成<span class="number">100</span>W条redis批量设置kv的语句(key=kn,value=vn)写入到/tmp目录下的redisTest.txt文件中</span><br><span class="line"><span class="keyword">for</span>((i=<span class="number">1</span>;i&lt;=<span class="number">100</span>*<span class="number">10000</span>;i++)); <span class="keyword">do</span> echo <span class="string">&quot;set k$i v$i&quot;</span> &gt;&gt; /tmp/redisTest.txt ;done;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>通过redis提供的管道<code>--pipe</code>命令插入100w大批量数据</p>
+<p>结合自己机器的地址：</p>
+<p>cat &#x2F;tmp&#x2F;redisTest.txt | &#x2F;opt&#x2F;redis-7.0.0&#x2F;src&#x2F;redis-cli -h 127.0.0.1 -p 6379 -a 111111 –pipe</p>
+<p>多出来的5条，是之前阳哥自己的其它测试数据 ，参考阳哥机器硬件，100w数据插入redis花费5.8秒左右</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629160827447.png" alt="image-20250629160827447"></p>
+</li>
+</ol>
+<p>使用<code>keys *</code>查询试试需要多少秒？</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629160924560.png" alt="image-20250629160924560"></p>
+<p><code>keys *</code>这个指令有致命的弊端，在实际环境中最好不要使用</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629161002193.png" alt="image-20250629161002193"></p>
+<p>不用<code>keys *</code>避免卡顿，那用什么？</p>
+<p>scan命令</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629161142416.png" alt="image-20250629161142416"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629161156963.png" alt="image-20250629161156963"></p>
+<p>特点：</p>
+<p>SCAN 命令是一个基于游标的迭代器，每次被调用之后， 都会向用户返回一个新的游标， 用户在下次迭代时需要使用这个新游标作为 SCAN 命令的游标参数， 以此来延续之前的迭代过程。</p>
+<p>SCAN 返回一个包含两个元素的数组， </p>
+<p>第一个元素是用于进行下一次迭代的新游标， </p>
+<p>第二个元素则是一个数组， 这个数组中包含了所有被迭代的元素。如果新游标返回零表示迭代已结束。</p>
+<p>SCAN的遍历顺序</p>
+<p>非常特别，它不是从第一维数组的第零位一直遍历到末尾，而是采用了高位进位加法来遍历。之所以使用这样特殊的方式进行遍历，是考虑到字典的扩容和缩容时避免槽位的遍历重复和遗漏。</p>
+<p>使用：</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629161236694.png" alt="image-20250629161236694"></p>
+<h3 id="生产调优"><a href="#生产调优" class="headerlink" title="生产调优"></a>生产调优</h3><p><code>redis.conf</code>文件<code>LAZY FREEING</code>相关说明</p>
+<ol>
+<li><p>阻塞和非阻塞删除命令</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629161434048.png" alt="image-20250629161434048"></p>
+</li>
+<li><p>优化配置</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629161507801.png" alt="image-20250629161507801"></p>
+</li>
+</ol>
+<h2 id="缓存双写一致性"><a href="#缓存双写一致性" class="headerlink" title="缓存双写一致性"></a>缓存双写一致性</h2><p>如果redis中有数据：需要和数据库中的值相同</p>
+<p>如果redis中无数据：数据库中的值要是最新值，且准备回写redis</p>
+<p>缓存按照操作来分，细分2种</p>
+<ol>
+<li>只读缓存</li>
+<li>读写缓存<ol>
+<li>同步直写策略<ol>
+<li>写数据库也同步写redis缓存，缓存和数据库中的数据一致。</li>
+<li>对于读写缓存来说，要想保证缓存和数据库中的数据一致，就要采用同步直写策略</li>
+</ol>
+</li>
+<li>异步缓写策略<ol>
+<li>正常业务运行中，mysql数据变动了，但是可以在业务上容许出现一定时间后才作用于redis，比如仓库、物流系统</li>
+<li>异常情况出现了，不得不将失败的动作重新修补，有可能需要借助消息中间件，实现消息重写</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250629162252115.png" alt="image-20250629162252115"></p>
+<p>问题，上面业务逻辑你用java代码如何写？</p>
+<p>采用双检加锁策略</p>
+<p>多个线程同时去查询数据库的这条数据，那么我们可以在第一个查询数据的请求上使用一个 互斥锁来锁住它。</p>
+<p>其他的线程走到这一步拿不到锁就等着，等第一个线程查询到了数据，然后做缓存。</p>
+<p>后面的线程进来发现已经有缓存了，就直接走缓存。 </p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629162233989.png" alt="image-20250629162233989"></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="meta">@Service</span></span><br><span class="line"><span class="meta">@Slf4j</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">UserService</span> &#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span> <span class="variable">CACHE_KEY_USER</span> <span class="operator">=</span> <span class="string">&quot;user:&quot;</span>;</span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> UserMapper userMapper;</span><br><span class="line">    <span class="meta">@Resource</span></span><br><span class="line">    <span class="keyword">private</span> RedisTemplate redisTemplate;</span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 业务逻辑没有写错，对于小厂中厂(QPS《=1000)可以使用，但是大厂不行</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> id</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> User <span class="title function_">findUserById</span><span class="params">(Integer id)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="type">User</span> <span class="variable">user</span> <span class="operator">=</span> <span class="literal">null</span>;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> CACHE_KEY_USER+id;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//1 先从redis里面查询，如果有直接返回结果，如果没有再去查询mysql</span></span><br><span class="line">        user = (User) redisTemplate.opsForValue().get(key);</span><br><span class="line"></span><br><span class="line">        <span class="keyword">if</span>(user == <span class="literal">null</span>)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="comment">//2 redis里面无，继续查询mysql</span></span><br><span class="line">            user = userMapper.selectByPrimaryKey(id);</span><br><span class="line">            <span class="keyword">if</span>(user == <span class="literal">null</span>)</span><br><span class="line">            &#123;</span><br><span class="line">                <span class="comment">//3.1 redis+mysql 都无数据</span></span><br><span class="line">                <span class="comment">//你具体细化，防止多次穿透，我们业务规定，记录下导致穿透的这个key回写redis</span></span><br><span class="line">                <span class="keyword">return</span> user;</span><br><span class="line">            &#125;<span class="keyword">else</span>&#123;</span><br><span class="line">                <span class="comment">//3.2 mysql有，需要将数据写回redis，保证下一次的缓存命中率</span></span><br><span class="line">                redisTemplate.opsForValue().set(key,user);</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> user;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="comment">/**</span></span><br><span class="line"><span class="comment">     * 加强补充，避免突然key失效了，打爆mysql，做一下预防，尽量不出现击穿的情况。</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@param</span> id</span></span><br><span class="line"><span class="comment">     * <span class="doctag">@return</span></span></span><br><span class="line"><span class="comment">     */</span></span><br><span class="line">    <span class="keyword">public</span> User <span class="title function_">findUserById2</span><span class="params">(Integer id)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="type">User</span> <span class="variable">user</span> <span class="operator">=</span> <span class="literal">null</span>;</span><br><span class="line">        <span class="type">String</span> <span class="variable">key</span> <span class="operator">=</span> CACHE_KEY_USER+id;</span><br><span class="line"></span><br><span class="line">        <span class="comment">//1 先从redis里面查询，如果有直接返回结果，如果没有再去查询mysql，</span></span><br><span class="line">        <span class="comment">// 第1次查询redis，加锁前</span></span><br><span class="line">        user = (User) redisTemplate.opsForValue().get(key);</span><br><span class="line">        <span class="keyword">if</span>(user == <span class="literal">null</span>) &#123;</span><br><span class="line">            <span class="comment">//2 大厂用，对于高QPS的优化，进来就先加锁，保证一个请求操作，让外面的redis等待一下，避免击穿mysql</span></span><br><span class="line">            <span class="keyword">synchronized</span> (UserService.class)&#123;</span><br><span class="line">                <span class="comment">//第2次查询redis，加锁后</span></span><br><span class="line">                user = (User) redisTemplate.opsForValue().get(key);</span><br><span class="line">                <span class="comment">//3 二次查redis还是null，可以去查mysql了(mysql默认有数据)</span></span><br><span class="line">                <span class="keyword">if</span> (user == <span class="literal">null</span>) &#123;</span><br><span class="line">                    <span class="comment">//4 查询mysql拿数据(mysql默认有数据)</span></span><br><span class="line">                    user = userMapper.selectByPrimaryKey(id);</span><br><span class="line">                    <span class="keyword">if</span> (user == <span class="literal">null</span>) &#123;</span><br><span class="line">                        <span class="keyword">return</span> <span class="literal">null</span>;</span><br><span class="line">                    &#125;<span class="keyword">else</span>&#123;</span><br><span class="line">                        <span class="comment">//5 mysql里面有数据的，需要回写redis，完成数据一致性的同步工作</span></span><br><span class="line">                        redisTemplate.opsForValue().setIfAbsent(key,user,<span class="number">7L</span>,TimeUnit.DAYS);</span><br><span class="line">                    &#125;</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">return</span> user;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+
+<h3 id="数据库和缓存一致性的几种更新策略"><a href="#数据库和缓存一致性的几种更新策略" class="headerlink" title="数据库和缓存一致性的几种更新策略"></a>数据库和缓存一致性的几种更新策略</h3><p>目的：达到最终一致性</p>
+<p>给缓存设置过期时间，定期清理缓存并回写，是保证最终一致性的解决方案。</p>
+<p>​	我们可以对存入缓存的数据设置过期时间，所有的 <strong>写操作以数据库为准</strong> ，对缓存操作只是尽最大努力即可。也就是说如果数据库写成功，缓存更新失败，那么只要到达过期时间，则后面的读请求自然会从数据库中读取新值然后回填缓存，达到一致性，切记，要以mysql的数据库写入库为准。</p>
+<p>上述方案和后续落地案例是调研后的主流+成熟的做法，但是考虑到各个公司业务系统的差距，</p>
+<p>不是100%绝对正确，不保证绝对适配全部情况，请同学们自行酌情选择打法，合适自己的最好。</p>
+<p>可以停机的情况</p>
+<ol>
+<li>挂牌报错，凌晨升级，温馨提示，服务降级</li>
+<li>单线程，这样重量级的数据操作最好不要多线程</li>
+</ol>
+<h3 id="4种更新策略"><a href="#4种更新策略" class="headerlink" title="4种更新策略"></a>4种更新策略</h3><ol>
+<li><p>先更新数据库，在更新缓存</p>
+<ol>
+<li><p>异常问题1</p>
+<ol>
+<li>先更新mysql的某商品的库存，当前商品的库存是100，更新为99个。</li>
+<li>先更新mysql修改为99成功，然后更新redis。</li>
+<li>此时假设异常出现，更新redis失败了，这导致mysql里面的库存是99而redis里面的还是100 。</li>
+<li>上述发生，会让数据库里面和缓存redis里面数据不一致，读到redis脏数据</li>
+</ol>
+</li>
+<li><p>异常问题2</p>
+<p>【先更新数据库，再更新缓存】，A、B两个线程发起调用</p>
+<p><strong>【正常逻辑】</strong></p>
+<p>1 A update mysql 100</p>
+<p>2 A update redis 100</p>
+<p>3 B update mysql 80</p>
+<p>4 B update redis 80</p>
+<p><strong>【异常逻辑】多线程环境下，A、B两个线程有快有慢，有前有后有并行</strong></p>
+<p>1 A update mysql 100</p>
+<p>3 B update mysql 80</p>
+<p>4 B update redis 80</p>
+<p>2 A update redis 100</p>
+<p> &#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;&#x3D;</p>
+<p>最终结果，mysql和redis数据不一致，o(╥﹏╥)o，</p>
+<p>mysql80,redis100</p>
+</li>
+</ol>
+</li>
+<li><p>先更新缓存，在更新数据库</p>
+<ol>
+<li><p>不太推荐</p>
+<p>业务上一般把mysql作为底单数据库（兜底），保证最后解释</p>
+</li>
+<li><p>异常问题</p>
+<p>【先更新缓存，再更新数据库】，A、B两个线程发起调用</p>
+<p><strong>【正常逻辑】</strong></p>
+<p>1 A update redis 100</p>
+<p>2 A update mysql 100</p>
+<p>3 B update redis 80</p>
+<p>4 B update mysql 80</p>
+<p><strong>【异常逻辑】多线程环境下，A、B两个线程有快有慢有并行</strong></p>
+<p>A update redis  100</p>
+<p>B update redis  80</p>
+<p>B update mysql 80</p>
+<p>A update mysql 100</p>
+<p>—-mysql100,redis80</p>
+</li>
+</ol>
+</li>
+<li><p>先删除缓存，在更新数据库</p>
+<ol>
+<li><p>异常问题</p>
+<ol>
+<li><p>步骤分析1，先删除缓存，再更新数据库</p>
+<p>A线程先成功删除了redis里面的数据，然后去更新mysql，此时mysql正在更新中，还没有结束。（比如网络延时）</p>
+<p>B突然出现要来读取缓存数据。</p>
+<p>20秒模拟网络延迟！</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629163042012.png" alt="image-20250629163042012"></p>
+</li>
+<li><p>步骤分析2，先删除缓存，再更新数据库</p>
+<ol>
+<li><p>此时redis里面的数据是空的，B线程来读取，先去读redis里数据(已经被A线程delete掉了)，此处出来2个问题：</p>
+<ol>
+<li>B从mysql获得了旧值</li>
+<li>B线程发现redis里没有(缓存缺失)马上去mysql里面读取，从数据库里面读取来的是旧值。</li>
+</ol>
+</li>
+<li><p>B会把获得的旧值写回redis </p>
+<p>获得旧值数据后返回前台并回写进redis(刚被A线程删除的旧数据有极大可能又被写回了)。</p>
+</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250629163248162.png" alt="image-20250629163248162"></p>
+</li>
+<li><p>步骤分析3，先删除缓存，再更新数据库</p>
+<p>A线程更新完mysql，发现redis里面的缓存是脏数据，A线程直接懵逼了，o(╥﹏╥)o</p>
+<p>两个并发操作，一个是更新操作，另一个是查询操作，</p>
+<p>A删除缓存后，B查询操作没有命中缓存，B先把老数据读出来后放到缓存中，然后A更新操作更新了数据库。</p>
+<p>于是，在缓存中的数据还是老的数据，导致缓存中的数据是脏的，而且还一直这样脏下去了。</p>
+</li>
+<li><p>总结流程：</p>
+<ol>
+<li><p>请求A进行写操作，删除redis缓存后，工作正在进行中，更新mysql……A还么有彻底更新完mysql，还没commit</p>
+</li>
+<li><p>请求B开工查询，查询redis发现缓存不存在(被A从redis中删除了)</p>
+</li>
+<li><p>请求B继续，去数据库查询得到了mysql中的旧值(A还没有更新完)</p>
+</li>
+<li><p>请求B将旧值写回redis缓存</p>
+</li>
+<li><p>请求A将新值写入mysql数据库</p>
+</li>
+</ol>
+<p><span style="color:#CC0000;"> <strong>上述情况就会导致不一致的情形出现。</strong> </span></p>
+<table>
+<thead>
+<tr>
+<th>时间</th>
+<th>线程A</th>
+<th>线程B</th>
+<th>出现的问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>t1</td>
+<td>请求A进行写操作，删除缓存成功后，工作正在mysql进行中……</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>t2</td>
+<td></td>
+<td>1 缓存中读取不到，立刻读mysql，由于A还没有对mysql更新完，读到的是旧值 2 还把从mysql读取的旧值，写回了redis</td>
+<td>1 A还没有更新完mysql，导致B读到了旧值 2 线程B遵守回写机制，把旧值写回redis，导致其它请求读取的还是旧值，A白干了。</td>
+</tr>
+<tr>
+<td>t3</td>
+<td>A更新完mysql数据库的值，over</td>
+<td></td>
+<td>redis是被B写回的旧值，mysql是被A更新的新值。出现了，数据不一致问题。</td>
+</tr>
+</tbody></table>
+<ol>
+<li><p>总结一下：</p>
+<p>先删除缓存，再更新数据库  如果数据库更新失败或超时或返回不及时，导致B线程请求访问缓存时发现redis里面没数据，缓存缺失，B再去读取mysql时，从数据库中读取到旧值，还写回redis，导致A白干了，o(╥﹏╥)o</p>
+</li>
+</ol>
+</li>
+<li><p>解决方案</p>
+<p>采用延时双删策略</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629164039054.png" alt="image-20250629164039054"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629164057376.png" alt="image-20250629164057376"></p>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+<li><p>先更新数据库，再删除缓存</p>
+<ol>
+<li><p>异常问题</p>
+<p> 先更新数据库，再删除缓存</p>
+<table>
+<thead>
+<tr>
+<th>时间</th>
+<th>线程A</th>
+<th>线程B</th>
+<th>出现的问题</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>t1</td>
+<td>更新数据库中的值……</td>
+<td></td>
+<td></td>
+</tr>
+<tr>
+<td>t2</td>
+<td></td>
+<td>缓存中立刻命中，此时B读取的是缓存旧值。</td>
+<td>A还没有来得及删除缓存的值，导致B缓存命中读到旧值。</td>
+</tr>
+<tr>
+<td>t3</td>
+<td>更新缓存的数据，over</td>
+<td></td>
+<td></td>
+</tr>
+</tbody></table>
+<table>
+<thead>
+<tr>
+<th>先更新数据库，再删除缓存</th>
+<th>假如缓存删除失败或者来不及，导致请求再次访问redis时缓存命中，读取到的是缓存旧值。</th>
+</tr>
+</thead>
+</table>
+</li>
+<li><p>解决方案</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629164315717.png" alt="image-20250629164315717"></p>
+<ol>
+<li>可以把要删除的缓存值或者是要更新的数据库值暂存到消息队列中（例如使用Kafka&#x2F;RabbitMQ等）。</li>
+<li>当程序没有能够成功地删除缓存值或者是更新数据库值时，可以从消息队列中重新读取这些值，然后再次进行删除或更新。</li>
+<li>如果能够成功地删除或更新，我们就要把这些值从消息队列中去除，以免重复操作，此时，我们也可以保证数据库和缓存的数据一致了，否则还需要再次进行重试</li>
+<li>如果重试超过的一定次数后还是没有成功，我们就需要向业务层发送报错信息了，通知运维人员。</li>
+</ol>
+</li>
+<li><p>类似经典的分布式事务问题，只有一个权威答案</p>
+<ol>
+<li>最终一致性<ol>
+<li>流量充值，先下发短信实际充值可能滞后5分钟，可以接受</li>
+<li>电商发货，短信下发但是物流明天见</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<h3 id="4种更新总结"><a href="#4种更新总结" class="headerlink" title="4种更新总结"></a>4种更新总结</h3><p>建议：优先**使用先更新数据库，再删除缓存的方案(先更库→后删存)**。理由如下：</p>
+<ol>
+<li>先删除缓存值再更新数据库，有可能导致请求因缓存缺失而访问数据库，给数据库带来压力导致打满mysql。</li>
+<li>如果业务应用中读取数据库和写缓存的时间不好估算，那么，延迟双删中的等待时间就不好设置。</li>
+</ol>
+<p> 多补充一句：如果<strong>使用先更新数据库，再删除缓存的方案</strong></p>
+<p>如果业务层要求必须读取一致性的数据，那么我们就需要在更新数据库时，先在Redis缓存客户端暂停并发读请求，等数据库更新完、缓存值删除后，再读取数据，从而保证数据一致性，这是理论可以达到的效果，但</p>
+<p>实际，不推荐，因为真实生产环境中，分布式下很难做到实时一致性，一般都是最终一致性，请大家参考。</p>
+<table>
+<thead>
+<tr>
+<th>策略</th>
+<th>高并发多线程条件下</th>
+<th>问题</th>
+<th>现象</th>
+<th>解决方案</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>先删除redis缓存，再更新mysql</td>
+<td>无</td>
+<td>缓存删除成功但数据库更新失败</td>
+<td>Java程序从数据库中读到旧值</td>
+<td>再次更新数据库，重试</td>
+</tr>
+<tr>
+<td></td>
+<td>有</td>
+<td>缓存删除成功但数据库更新中……有并发读请求</td>
+<td>并发请求从数据库读到旧值并回写到redis，导致后续都是从redis读取到旧值</td>
+<td>延迟双删</td>
+</tr>
+<tr>
+<td><strong>先更新mysql，再删除redis缓存</strong></td>
+<td>无</td>
+<td>数据库更新成功，但缓存删除失败</td>
+<td>Java程序从redis中读到旧值</td>
+<td>再次删除缓存，重试</td>
+</tr>
+<tr>
+<td></td>
+<td>有</td>
+<td>数据库更新成功但缓存删除中……有并发读请求</td>
+<td>并发请求从缓存读到旧值</td>
+<td>等待redis删除完成，这段时间有数据不一致，短暂存在。</td>
+</tr>
+</tbody></table>
+<h3 id="Canal"><a href="#Canal" class="headerlink" title="Canal"></a>Canal</h3><p><a target="_blank" rel="noopener" href="https://github.com/alibaba/canal">canal</a></p>
+<p>是什么？</p>
+<ul>
+<li>主要用途是基于 MySQL 数据库增量日志解析，提供增量数据订阅和消费</li>
+</ul>
+<p>能干嘛？</p>
+<ul>
+<li>数据库镜像</li>
+<li>数据库实时备份</li>
+<li>索引构建和实时维护（拆分异构索引、倒排索引等）</li>
+<li>业务cache刷新</li>
+<li>带业务逻辑的增量数据处理</li>
+</ul>
+<p>工作原理</p>
+<ol>
+<li><p>传统MySQL主从复制工作原理</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629165208291.png" alt="image-20250629165208291"></p>
+<p>MySQL的主从复制将经过如下步骤：</p>
+<ol>
+<li>当 master 主服务器上的数据发生改变时，则将其改变写入二进制事件日志文件中；</li>
+<li>salve 从服务器会在一定时间间隔内对 master 主服务器上的二进制日志进行探测，探测其是否发生过改变，</li>
+</ol>
+<p>如果探测到 master 主服务器的二进制事件日志发生了改变，则开始一个 I&#x2F;O Thread 请求 master 二进制事件日志；</p>
+<ol start="3">
+<li>同时 master 主服务器为每个 I&#x2F;O Thread 启动一个dump Thread，用于向其发送二进制事件日志；</li>
+<li>slave 从服务器将接收到的二进制事件日志保存至自己本地的中继日志文件中；</li>
+<li>salve 从服务器将启动 SQL Thread 从中继日志中读取二进制日志，在本地重放，使得其数据和主服务器保持一致；</li>
+<li>最后 I&#x2F;O Thread 和 SQL Thread 将进入睡眠状态，等待下一次被唤醒；</li>
+</ol>
+</li>
+<li><p>cana工作原理</p>
+<ul>
+<li><p>canal 模拟 MySQL slave 的交互协议，伪装自己为 MySQL slave ，向 MySQL master 发送 dump 协议</p>
+</li>
+<li><p>MySQL master 收到 dump 请求，开始推送 binary log 给 slave (即 canal )</p>
+</li>
+<li><p>canal 解析 binary log 对象(原始为 byte 流)</p>
+</li>
+</ul>
+</li>
+</ol>
+<h3 id="redis与mysql数据双写一致性案例"><a href="#redis与mysql数据双写一致性案例" class="headerlink" title="redis与mysql数据双写一致性案例"></a>redis与mysql数据双写一致性案例</h3><p>配置</p>
+<ol>
+<li><p>mysql</p>
+<ol>
+<li><p>查询mysql版本：<code>SELECT VERSION();</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629165619477.png" alt="image-20250629165619477"></p>
+</li>
+<li><p>查看的主机二进制日志：<code>SHOW MASTER STATUS;</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629165745534.png" alt="image-20250629165745534"></p>
+</li>
+<li><p>查看<code>SHOW VARIABLES LIKE &#39;log_bin&#39;;</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629165914631.png" alt="image-20250629165914631"></p>
+</li>
+<li><p>开启<code>MySQL的binlog写入功能</code></p>
+<ol>
+<li><p>最好提前备份</p>
+</li>
+<li><p>my.ini</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629170538008.png" alt="image-20250629170538008"></p>
+<p>window 		<code>my.ini</code></p>
+<p>linux    		  <code>my.conf</code></p>
+<figure class="highlight sql"><table><tr><td class="code"><pre><span class="line">log<span class="operator">-</span>bin<span class="operator">=</span>mysql<span class="operator">-</span>bin #开启 binlog</span><br><span class="line">binlog<span class="operator">-</span>format<span class="operator">=</span><span class="type">ROW</span> #选择 <span class="type">ROW</span> 模式</span><br><span class="line">server_id<span class="operator">=</span><span class="number">1</span>    #配置MySQL replaction需要定义，不要和canal的 slaveId重复</span><br></pre></td></tr></table></figure>
+
+<ol>
+<li>ROW模式 除了记录sql语句之外，还会记录每个字段的变化情况，能够清楚的记录每行数据的变化历史，但会占用较多的空间。</li>
+<li>STATEMENT模式只记录了sql语句，但是没有记录上下文信息，在进行数据恢复的时候可能会导致数据的丢失情况；</li>
+<li>MIX模式比较灵活的记录，理论上说当遇到了表结构变更的时候，就会记录为statement模式。当遇到了数据更新或者删除情况下就会变为row模式；</li>
+</ol>
+</li>
+<li><p>重启<code>MySQL</code></p>
+<ol>
+<li>打开“服务”管理器：按 <em>Win + R</em> 键，输入 <em>services.msc</em> 并按回车。</li>
+<li>找到 MySQL 服务（例如 <em>MySQL80</em>）。</li>
+<li>右键点击该服务，选择“重新启动”。</li>
+</ol>
+</li>
+<li><p>再次查看<code>SHOW VARIABLES LIKE &#39;log_bin</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629170945363.png" alt="image-20250629170945363"></p>
+</li>
+<li><p>授权<code>canal</code>连接<code>MySQL</code>账号</p>
+<ol>
+<li><p><code>MySQL</code>默认的用户在<code>MySQL</code>库的<code>user</code>表里</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629171222487.png" alt="image-20250629171222487"></p>
+</li>
+<li><p>默认没有canal账户，在此处新建+授权</p>
+<p>sql<br>DROP USER IF EXISTS ‘canal‘@’%’;<br>CREATE USER ‘canal‘@’%’ IDENTIFIED BY ‘canal’;<br>GRANT ALL PRIVILEGES ON <em>.</em> TO ‘canal‘@’%’ IDENTIFIED BY ‘canal’;<br>FLUSH PRIVILEGES;<br>SELECT * FROM mysql.user;</p>
+<figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line"></span><br><span class="line">如果提示`1290 - The MySQL server is running with the --skip-grant-tables option so it cannot execute this statement`</span><br><span class="line"></span><br><span class="line">sql</span><br><span class="line">FLUSH PRIVILEGES;</span><br><span class="line">DROP USER IF EXISTS &#x27;canal&#x27;@&#x27;%&#x27;;</span><br><span class="line">CREATE USER &#x27;canal&#x27;@&#x27;%&#x27; IDENTIFIED BY &#x27;canal&#x27;;  </span><br><span class="line">GRANT ALL PRIVILEGES ON *.* TO &#x27;canal&#x27;@&#x27;%&#x27; IDENTIFIED BY &#x27;canal&#x27;;  </span><br><span class="line">FLUSH PRIVILEGES;</span><br><span class="line">SELECT * FROM mysql.user;</span><br></pre></td></tr></table></figure>
+
+<p><img src="/hexo-docs/images/redisImages/image-20250629171914663.png" alt="image-20250629171914663"></p>
+<p>canal就添加好了！</p>
+</li>
+</ol>
+</li>
+<li><p><code>canal</code>服务端</p>
+<ol>
+<li><p>下载</p>
+<p><a target="_blank" rel="noopener" href="https://github.com/alibaba/canal/releases/download/canal-1.1.8/canal.deployer-1.1.8.tar.gz">https://github.com/alibaba/canal/releases/download/canal-1.1.8/canal.deployer-1.1.8.tar.gz</a></p>
+</li>
+<li><p>上传到<code>linux</code>的某个位置</p>
+<p>我上传到根目录的<code>mycanal</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629183608075.png" alt="image-20250629183608075"></p>
+</li>
+<li><p>解压文件</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629183855880.png" alt="image-20250629183855880"></p>
+</li>
+<li><p>配置<code>instance.properties</code></p>
+<p>进入到<code>/mycanal/conf/example</code>找到<code>instance.properties</code></p>
+<p>使用vim编辑<code>instance.properties</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629184300692.png" alt="image-20250629184300692"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629184350656.png" alt="image-20250629184350656"></p>
+</li>
+<li><p>在<code>/mycanal/bin</code>目录下执行，<code>./startup.sh</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629184800033.png" alt="image-20250629184800033"></p>
+</li>
+<li><p>查看</p>
+<p>判断<code>canal</code>启动是否成功</p>
+<ol>
+<li><p>查看server日志<code>/mycanal/logs/canal/canal.log</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629185018703.png" alt="image-20250629185018703"></p>
+</li>
+<li><p>查看样例<code>example</code>的日志<code>/mycanal/logs/example/example.log</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629185223183.png" alt="image-20250629185223183"></p>
+</li>
+</ol>
+</li>
+<li><p>代码编写</p>
+<ol>
+<li><p>pom</p>
+<figure class="highlight xml"><table><tr><td class="code"><pre><span class="line"><span class="tag">&lt;<span class="name">dependencies</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-web<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="comment">&lt;!--jedis--&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>redis.clients<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>jedis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>4.3.1<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="comment">&lt;!-- lombok --&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.projectlombok<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>lombok<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="comment">&lt;!-- redis --&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.springframework.boot<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>spring-boot-starter-data-redis<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>org.apache.commons<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>commons-pool2<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="comment">&lt;!--Mysql数据库驱动--&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>mysql<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>mysql-connector-java<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>5.1.47<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="comment">&lt;!--SpringBoot集成druid连接池--&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.alibaba<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>druid-spring-boot-starter<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.1.10<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line">    <span class="comment">&lt;!--canal--&gt;</span></span><br><span class="line">    <span class="tag">&lt;<span class="name">dependency</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">groupId</span>&gt;</span>com.alibaba.otter<span class="tag">&lt;/<span class="name">groupId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">artifactId</span>&gt;</span>canal.client<span class="tag">&lt;/<span class="name">artifactId</span>&gt;</span></span><br><span class="line">        <span class="tag">&lt;<span class="name">version</span>&gt;</span>1.1.4<span class="tag">&lt;/<span class="name">version</span>&gt;</span></span><br><span class="line">    <span class="tag">&lt;/<span class="name">dependency</span>&gt;</span></span><br><span class="line"><span class="tag">&lt;/<span class="name">dependencies</span>&gt;</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p>yaml</p>
+<figure class="highlight yaml"><table><tr><td class="code"><pre><span class="line"><span class="attr">spring:</span></span><br><span class="line">  <span class="attr">datasource:</span></span><br><span class="line">    <span class="attr">type:</span> <span class="string">com.alibaba.druid.pool.DruidDataSource</span></span><br><span class="line">    <span class="attr">username:</span> <span class="string">root</span></span><br><span class="line">    <span class="attr">password:</span> <span class="string">root</span></span><br><span class="line">    <span class="attr">url:</span> <span class="string">jdbc:mysql://localhost:3306/db01?useUnicode=true&amp;characterEncoding=utf-8&amp;useSSL=false</span></span><br><span class="line">    <span class="attr">druid:</span></span><br><span class="line">      <span class="attr">test-while-idle:</span> <span class="literal">false</span></span><br><span class="line">  <span class="attr">application:</span></span><br><span class="line">    <span class="attr">name:</span> <span class="string">Redis7_study</span></span><br></pre></td></tr></table></figure>
+</li>
+<li><p><code>RedisUtlis</code></p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.utlis;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> redis.clients.jedis.Jedis;</span><br><span class="line"><span class="keyword">import</span> redis.clients.jedis.JedisPool;</span><br><span class="line"><span class="keyword">import</span> redis.clients.jedis.JedisPoolConfig;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@auther</span> Lazy</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RedisUtils</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span>  <span class="variable">REDIS_IP_ADDR</span> <span class="operator">=</span> <span class="string">&quot;192.168.0.13&quot;</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span>  <span class="variable">REDIS_pwd</span> <span class="operator">=</span> <span class="string">&quot;redis&quot;</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> JedisPool jedisPool;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">static</span> &#123;</span><br><span class="line">        JedisPoolConfig jedisPoolConfig=<span class="keyword">new</span> <span class="title class_">JedisPoolConfig</span>();</span><br><span class="line">        jedisPoolConfig.setMaxTotal(<span class="number">20</span>);</span><br><span class="line">        jedisPoolConfig.setMaxIdle(<span class="number">10</span>);</span><br><span class="line">        jedisPool=<span class="keyword">new</span> <span class="title class_">JedisPool</span>(jedisPoolConfig,REDIS_IP_ADDR,<span class="number">6379</span>,<span class="number">10000</span>,REDIS_pwd);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> Jedis <span class="title function_">getJedis</span><span class="params">()</span> <span class="keyword">throws</span> Exception &#123;</span><br><span class="line">        <span class="keyword">if</span>(<span class="literal">null</span>!=jedisPool)&#123;</span><br><span class="line">            <span class="keyword">return</span> jedisPool.getResource();</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">Exception</span>(<span class="string">&quot;Jedispool is not ok&quot;</span>);</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>测试类</p>
+<figure class="highlight java"><table><tr><td class="code"><pre><span class="line"><span class="keyword">package</span> com.lazy.main;</span><br><span class="line"></span><br><span class="line"><span class="keyword">import</span> com.alibaba.fastjson.JSONObject;</span><br><span class="line"><span class="keyword">import</span> com.alibaba.otter.canal.client.CanalConnector;</span><br><span class="line"><span class="keyword">import</span> com.alibaba.otter.canal.client.CanalConnectors;</span><br><span class="line"><span class="keyword">import</span> com.alibaba.otter.canal.protocol.CanalEntry.*;</span><br><span class="line"><span class="keyword">import</span> com.alibaba.otter.canal.protocol.Message;</span><br><span class="line"><span class="keyword">import</span> com.lazy.utlis.RedisUtils;</span><br><span class="line"><span class="keyword">import</span> redis.clients.jedis.Jedis;</span><br><span class="line"><span class="keyword">import</span> java.net.InetSocketAddress;</span><br><span class="line"><span class="keyword">import</span> java.util.List;</span><br><span class="line"><span class="keyword">import</span> java.util.UUID;</span><br><span class="line"><span class="keyword">import</span> java.util.concurrent.TimeUnit;</span><br><span class="line"></span><br><span class="line"><span class="comment">/**</span></span><br><span class="line"><span class="comment"> * <span class="doctag">@author</span> Lazy</span></span><br><span class="line"><span class="comment"> */</span></span><br><span class="line"><span class="keyword">public</span> <span class="keyword">class</span> <span class="title class_">RedisCanalClientExample</span></span><br><span class="line">&#123;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">Integer</span> <span class="variable">_60SECONDS</span> <span class="operator">=</span> <span class="number">60</span>;</span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">final</span> <span class="type">String</span>  <span class="variable">REDIS_IP_ADDR</span> <span class="operator">=</span> <span class="string">&quot;192.168.0.133&quot;</span>;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">redisInsert</span><span class="params">(List&lt;Column&gt; columns)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="type">JSONObject</span> <span class="variable">jsonObject</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">JSONObject</span>();</span><br><span class="line">        <span class="keyword">for</span> (Column column : columns)</span><br><span class="line">        &#123;</span><br><span class="line">            System.out.println(column.getName() + <span class="string">&quot; : &quot;</span> + column.getValue() + <span class="string">&quot;    update=&quot;</span> + column.getUpdated());</span><br><span class="line">            jsonObject.put(column.getName(),column.getValue());</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span>(columns.size() &gt; <span class="number">0</span>)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">try</span>(<span class="type">Jedis</span> <span class="variable">jedis</span> <span class="operator">=</span> RedisUtils.getJedis())</span><br><span class="line">            &#123;</span><br><span class="line">                jedis.set(columns.get(<span class="number">0</span>).getValue(),jsonObject.toJSONString());</span><br><span class="line">            &#125;<span class="keyword">catch</span> (Exception e)&#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">redisDelete</span><span class="params">(List&lt;Column&gt; columns)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="type">JSONObject</span> <span class="variable">jsonObject</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">JSONObject</span>();</span><br><span class="line">        <span class="keyword">for</span> (Column column : columns)</span><br><span class="line">        &#123;</span><br><span class="line">            jsonObject.put(column.getName(),column.getValue());</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span>(columns.size() &gt; <span class="number">0</span>)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">try</span>(<span class="type">Jedis</span> <span class="variable">jedis</span> <span class="operator">=</span> RedisUtils.getJedis())</span><br><span class="line">            &#123;</span><br><span class="line">                jedis.del(columns.get(<span class="number">0</span>).getValue());</span><br><span class="line">            &#125;<span class="keyword">catch</span> (Exception e)&#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">private</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">redisUpdate</span><span class="params">(List&lt;Column&gt; columns)</span></span><br><span class="line">    &#123;</span><br><span class="line">        <span class="type">JSONObject</span> <span class="variable">jsonObject</span> <span class="operator">=</span> <span class="keyword">new</span> <span class="title class_">JSONObject</span>();</span><br><span class="line">        <span class="keyword">for</span> (Column column : columns)</span><br><span class="line">        &#123;</span><br><span class="line">            System.out.println(column.getName() + <span class="string">&quot; : &quot;</span> + column.getValue() + <span class="string">&quot;    update=&quot;</span> + column.getUpdated());</span><br><span class="line">            jsonObject.put(column.getName(),column.getValue());</span><br><span class="line">        &#125;</span><br><span class="line">        <span class="keyword">if</span>(columns.size() &gt; <span class="number">0</span>)</span><br><span class="line">        &#123;</span><br><span class="line">            <span class="keyword">try</span>(<span class="type">Jedis</span> <span class="variable">jedis</span> <span class="operator">=</span> RedisUtils.getJedis())</span><br><span class="line">            &#123;</span><br><span class="line">                jedis.set(columns.get(<span class="number">0</span>).getValue(),jsonObject.toJSONString());</span><br><span class="line">                System.out.println(<span class="string">&quot;---------update after: &quot;</span>+jedis.get(columns.get(<span class="number">0</span>).getValue()));</span><br><span class="line">            &#125;<span class="keyword">catch</span> (Exception e)&#123;</span><br><span class="line">                e.printStackTrace();</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">printEntry</span><span class="params">(List&lt;Entry&gt; entrys)</span> &#123;</span><br><span class="line">        <span class="keyword">for</span> (Entry entry : entrys) &#123;</span><br><span class="line">            <span class="keyword">if</span> (entry.getEntryType() == EntryType.TRANSACTIONBEGIN || entry.getEntryType() == EntryType.TRANSACTIONEND) &#123;</span><br><span class="line">                <span class="keyword">continue</span>;</span><br><span class="line">            &#125;</span><br><span class="line"></span><br><span class="line">            <span class="type">RowChange</span> <span class="variable">rowChage</span> <span class="operator">=</span> <span class="literal">null</span>;</span><br><span class="line">            <span class="keyword">try</span> &#123;</span><br><span class="line">                <span class="comment">//获取变更的row数据</span></span><br><span class="line">                rowChage = RowChange.parseFrom(entry.getStoreValue());</span><br><span class="line">            &#125; <span class="keyword">catch</span> (Exception e) &#123;</span><br><span class="line">                <span class="keyword">throw</span> <span class="keyword">new</span> <span class="title class_">RuntimeException</span>(<span class="string">&quot;ERROR ## parser of eromanga-event has an error,data:&quot;</span> + entry.toString(),e);</span><br><span class="line">            &#125;</span><br><span class="line">            <span class="comment">//获取变动类型</span></span><br><span class="line">            <span class="type">EventType</span> <span class="variable">eventType</span> <span class="operator">=</span> rowChage.getEventType();</span><br><span class="line">            System.out.println(String.format(<span class="string">&quot;================&amp;gt; binlog[%s:%s] , name[%s,%s] , eventType : %s&quot;</span>,</span><br><span class="line">                    entry.getHeader().getLogfileName(), entry.getHeader().getLogfileOffset(),</span><br><span class="line">                    entry.getHeader().getSchemaName(), entry.getHeader().getTableName(), eventType));</span><br><span class="line"></span><br><span class="line">            <span class="keyword">for</span> (RowData rowData : rowChage.getRowDatasList()) &#123;</span><br><span class="line">                <span class="keyword">if</span> (eventType == EventType.INSERT) &#123;</span><br><span class="line">                    redisInsert(rowData.getAfterColumnsList());</span><br><span class="line">                &#125; <span class="keyword">else</span> <span class="keyword">if</span> (eventType == EventType.DELETE) &#123;</span><br><span class="line">                    redisDelete(rowData.getBeforeColumnsList());</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;<span class="comment">//EventType.UPDATE</span></span><br><span class="line">                    redisUpdate(rowData.getAfterColumnsList());</span><br><span class="line">                &#125;</span><br><span class="line">            &#125;</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line"></span><br><span class="line"></span><br><span class="line">    <span class="keyword">public</span> <span class="keyword">static</span> <span class="keyword">void</span> <span class="title function_">main</span><span class="params">(String[] args)</span></span><br><span class="line">    &#123;</span><br><span class="line">        System.out.println(<span class="string">&quot;---------O(∩_∩)O哈哈~ initCanal() main方法-----------&quot;</span>);</span><br><span class="line"></span><br><span class="line">        <span class="comment">//=================================</span></span><br><span class="line">        <span class="comment">// 创建链接canal服务端</span></span><br><span class="line">        <span class="type">CanalConnector</span> <span class="variable">connector</span> <span class="operator">=</span> CanalConnectors.newSingleConnector(<span class="keyword">new</span> <span class="title class_">InetSocketAddress</span>(REDIS_IP_ADDR,</span><br><span class="line">                <span class="number">11111</span>), <span class="string">&quot;example&quot;</span>, <span class="string">&quot;&quot;</span>, <span class="string">&quot;&quot;</span>);</span><br><span class="line">        <span class="type">int</span> <span class="variable">batchSize</span> <span class="operator">=</span> <span class="number">1000</span>;</span><br><span class="line">        <span class="comment">//空闲空转计数器</span></span><br><span class="line">        <span class="type">int</span> <span class="variable">emptyCount</span> <span class="operator">=</span> <span class="number">0</span>;</span><br><span class="line">        System.out.println(<span class="string">&quot;---------------------canal init OK，开始监听mysql变化------&quot;</span>);</span><br><span class="line">        <span class="keyword">try</span> &#123;</span><br><span class="line">            connector.connect();</span><br><span class="line">            <span class="comment">//connector.subscribe(&quot;.*\\..*&quot;);</span></span><br><span class="line">            connector.subscribe(<span class="string">&quot;db01.dept&quot;</span>);</span><br><span class="line">            connector.rollback();</span><br><span class="line">            <span class="type">int</span> <span class="variable">totalEmptyCount</span> <span class="operator">=</span> <span class="number">10</span> * _60SECONDS;</span><br><span class="line">            <span class="keyword">while</span> (emptyCount &lt; totalEmptyCount) &#123;</span><br><span class="line">                System.out.println(<span class="string">&quot;我是canal，每秒一次正在监听:&quot;</span>+ UUID.randomUUID().toString());</span><br><span class="line">                <span class="type">Message</span> <span class="variable">message</span> <span class="operator">=</span> connector.getWithoutAck(batchSize); <span class="comment">// 获取指定数量的数据</span></span><br><span class="line">                <span class="type">long</span> <span class="variable">batchId</span> <span class="operator">=</span> message.getId();</span><br><span class="line">                <span class="type">int</span> <span class="variable">size</span> <span class="operator">=</span> message.getEntries().size();</span><br><span class="line">                <span class="keyword">if</span> (batchId == -<span class="number">1</span> || size == <span class="number">0</span>) &#123;</span><br><span class="line">                    emptyCount++;</span><br><span class="line">                    <span class="keyword">try</span> &#123; TimeUnit.SECONDS.sleep(<span class="number">1</span>); &#125; <span class="keyword">catch</span> (InterruptedException e) &#123; e.printStackTrace(); &#125;</span><br><span class="line">                &#125; <span class="keyword">else</span> &#123;</span><br><span class="line">                    <span class="comment">//计数器重新置零</span></span><br><span class="line">                    emptyCount = <span class="number">0</span>;</span><br><span class="line">                    printEntry(message.getEntries());</span><br><span class="line">                &#125;</span><br><span class="line">                connector.ack(batchId); <span class="comment">// 提交确认</span></span><br><span class="line">                <span class="comment">// connector.rollback(batchId); // 处理失败, 回滚数据</span></span><br><span class="line">            &#125;</span><br><span class="line">            System.out.println(<span class="string">&quot;已经监听了&quot;</span>+totalEmptyCount+<span class="string">&quot;秒，无任何消息，请重启重试......&quot;</span>);</span><br><span class="line">        &#125; <span class="keyword">finally</span> &#123;</span><br><span class="line">            connector.disconnect();</span><br><span class="line">        &#125;</span><br><span class="line">    &#125;</span><br><span class="line">&#125;</span><br></pre></td></tr></table></figure>
+</li>
+<li><p>效果</p>
+<ol>
+<li><p>增</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629190307707.png" alt="image-20250629190307707"></p>
+</li>
+<li><p>删</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629190320876.png" alt="image-20250629190320876"></p>
+</li>
+<li><p>改</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629190257806.png" alt="image-20250629190257806"></p>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<p>​	</p>
+<p>java程序下<code>connector.subscribe</code>配置的过滤正则</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629190522893.png" alt="image-20250629190522893"></p>
+<p>关闭资源代码简写</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250629190548572.png" alt="image-20250629190548572"></p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs">Lazy</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/">https://mac2git.github.io/hexo-docs/2025/08/13/redis/bigkey和缓存双写/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://mac2git.github.io/hexo-docs" target="_blank">Lazy的个人博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/hexo-docs/tags/Redis/">Redis</a></div><div class="post-share"><div class="social-share" data-image="https://pic.crazytaxii.com/Redis_Logo.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">Redis基础</div></div><div class="info-2"><div class="info-item-1">什么是Redis？Redis 是一个内存数据存储，被数百万开发者用作缓存、向量数据库、文档数据库、流式引擎和消息代理。Redis 具有内置的复制和不同级别的磁盘持久化。它支持复杂的数据类型（例如，字符串、散列、列表、集合、有序集合和 JSON），并为这些数据类型定义了原子操作。 Redis 通常被称为数据结构服务器。这意味着 Redis 通过一组命令提供对可变数据结构的访问，这些命令通过 TCP 套接字和简单协议使用服务器-客户端模型发送。因此，不同的进程可以以共享的方式查询和修改相同的数据结构。 Redis 实现的数据结构具有一些特殊的属性：  Redis 会将其存储在磁盘上，即使它们总是被服务器内存中读取和修改。这意味着 Redis 速度快，但同时也非易失性。 数据结构的实现强调内存效率，因此 Redis 内部的数据结构可能比使用高级编程语言建模的相同数据结构模型使用更少的内存。 Redis 提供了一系列数据库中常见的功能，如复制、可调的持久性级别、集群和高度可用性。  下载Redis 命名规则： ​	版本号第二位如果是奇数，则为非稳定版本，如2.7、2.9、3.1 ​	版本...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">RDB+AOF</div></div><div class="info-2"><div class="info-item-1">redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 RDB（Redis 数据库）：RDB 持久性以指定的时间间隔执行数据集的时间点快照。  rdb（redis database）能干嘛？ 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot内存快照，它恢复时再将硬盘快照文件直接读回到内存里。Redis的数据都在内存中，保存备份时它执行的是全量快照，也就是说，把内存中的所有数据都记录到磁盘中，一锅端。 Rdb保存的是dump.rdb文件  Redis6.0.16以下  Redis6.2以及Redis-7.0.0  自动触发 redis7版本，按照redis.conf里配置的save&lt;seconds&gt;&lt...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RedLock算法和底层源码分析和缓存淘汰策略</div></div><div class="info-2"><div class="info-item-1">上一章自研的redis锁对于一般中小公司，不是特别高并发场景足够用了，单机redis小业务也撑得住。但是对于特别高并发场景的话，就得使用Redisson了 Redis分布式锁-RedLock红锁算法（Distributed locks with Redis）官网：Redis 的分布式锁 |文档 说明：  为什么学习这个？怎样产生的？   线程 1 首先获取锁成功，将键值对写入 redis 的 master 节点，在 redis 将该键值对同步到 slave 节点之前，master 发生了故障；redis 触发故障转移，其中一个 slave 升级为新的 master，此时新上位的master并不包含线程1写入的键值对，因此线程 2 尝试获取锁也可以成功拿到锁，此时相当于有两个线程获取到了锁，可能会导致各种预期之外的情况发生，例如最常见的脏数据。  我们加的是排它独占锁，同一时间只能有一个建redis锁成功并持有锁，严禁出现2个以上的请求线程拿到锁。危险的！ RedLock算法设计理念Redis也提供了Redlock算法，用来实现基于多个实例的分布式锁。锁变量由多个实例维护，即使有实...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/RDB+AOF/" title="RDB+AOF"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RDB+AOF</div></div><div class="info-2"><div class="info-item-1">redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 RDB（Redis 数据库）：RDB 持久性以指定的时间间隔执行数据集的时间点快照。  rdb（redis database）能干嘛？ 在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot内存快照，它恢复时再将硬盘快照文件直接读回到内存里。Redis的数据都在内存中，保存备份时它执行的是全量快照，也就是说，把内存中的所有数据都记录到磁盘中，一锅端。 Rdb保存的是dump.rdb文件  Redis6.0.16以下  Redis6.2以及Redis-7.0.0  自动触发 redis7版本，按照redis.conf里配置的save&lt;seconds&gt;&lt...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">Redis基础</div></div><div class="info-2"><div class="info-item-1">什么是Redis？Redis 是一个内存数据存储，被数百万开发者用作缓存、向量数据库、文档数据库、流式引擎和消息代理。Redis 具有内置的复制和不同级别的磁盘持久化。它支持复杂的数据类型（例如，字符串、散列、列表、集合、有序集合和 JSON），并为这些数据类型定义了原子操作。 Redis 通常被称为数据结构服务器。这意味着 Redis 通过一组命令提供对可变数据结构的访问，这些命令通过 TCP 套接字和简单协议使用服务器-客户端模型发送。因此，不同的进程可以以共享的方式查询和修改相同的数据结构。 Redis 实现的数据结构具有一些特殊的属性：  Redis 会将其存储在磁盘上，即使它们总是被服务器内存中读取和修改。这意味着 Redis 速度快，但同时也非易失性。 数据结构的实现强调内存效率，因此 Redis 内部的数据结构可能比使用高级编程语言建模的相同数据结构模型使用更少的内存。 Redis 提供了一系列数据库中常见的功能，如复制、可调的持久性级别、集群和高度可用性。  下载Redis 命名规则： ​	版本号第二位如果是奇数，则为非稳定版本，如2.7、2.9、3.1 ​	版本...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">epoll函数和IO多路复用深度解析</div></div><div class="info-2"><div class="info-item-1">epoll 函数和 IO 多路复用深度解析没有 epoll 和 IO 多路复用之前多路复用要解决的问题并发多客户端连接，在多路复用之前最简单和典型的方案：同步阻塞网络IO模型 这种模式的特点就是用一个进程来处理一个网络连接(一个用户请求)，比如一段典型的示例代码如下。 直接调用 recv 函数从一个 socket 上读取数据。 int main()&#123; ... recv(sock, ...) //从用户角度来看非常简单，一个recv一用，要接收的数据就到我们手里了。&#125;  我们来总结一下这种方式： 优点： 就是这种方式非常容易让人理解，写起代码来非常的自然，符合人的直线型思维。 缺点： 就是性能差，每个用户请求到来都得占用一个进程来处理，来一个请求就要分配一个进程跟进处理， 类似一个学生配一个老师，一位患者配一个医生，可能吗？进程是一个很笨重的东西。一台服务器上创建不了多少个进程。 结论进程在 Linux 上是一个开销不小的家伙，先不说创建，光是上下文切换一次就得几个微秒。所以为了高效地对海量用户提供服务，必须要让一个进程能同时处理很多个 tcp 连接才行。现在假...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/" title="HyperLogLog&amp;Geo&amp;Bitmap"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">HyperLogLog&amp;Geo&amp;Bitmap</div></div><div class="info-2"><div class="info-item-1">统计类型有哪些？ 亿级系统中常见的四种统计  聚合统计 统计多个集合元素的聚合结果，就是前面的交集差集等集合统计   排序统计（zset） 在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet  因为可以使用分页，正反排序  二值统计（bitmap） 集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）  基数统计（hyperloglog） 指 统计一个集合不重复元素个数     HyperLogLog名词解释  什么是UV?  Unique Visitor，独立访客，一般理解为客户端IP 需要去重考虑，例如一个人一天访问了10次网站，一天的UV就是1   什么是PV?  Page View，页面浏览量 不用去重，例如一个人一天访问了10次网站，一天的PV就是10   什么是DAU?  Daily  Active User  日活跃用户量 登录或者使用了某个产品的用户数（去重复登录的用户），避免恶意刷单  常用于反映网站，互联网应用或者网络游戏的运营情况      什么是MAU？  Monthly...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/pub&sub/" title="pub&amp;sub(发布&amp;订阅)"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">pub&amp;sub(发布&amp;订阅)</div></div><div class="info-2"><div class="info-item-1">发布&#x2F;订阅是一种消息通信模式：发送者（publish）发送消息，订阅者（subscribe）接受消息，可以实现进程间的消息传递 Redis  可以实现消息中间件 MQ 的功能，通过发布订阅实现消息的引导和分流。不推荐使用该功能，专业的事情交给专业的中间件，redis就做好分布式缓存功能 能干嘛？  redis 客户端可以订阅任意数量的频道，类似我们微信关注多个公众号   当有新的消息通过 publish 命令发送给频道 channel1 时     总结： 发布&#x2F;订阅其实是一个轻量的队列，只不过数据不会被持久化，一般用来处理实时性较高的异步消息    常用命令  subscribe channel [channel...]   订阅给定的一个或多个频道的信息 推荐先执行订阅后再发布，订阅成功之前发布的消息是收不到的 订阅的客户端每次可以收到一个3个参数的消息 消息的种类 始发频道的名称 实际的消息内容         publish channel message    发布消息到指定的频道    psubscribe pattern[pattern...] ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#Redis%E4%B8%BA%E4%BB%80%E4%B9%88%E6%98%AF%E5%8D%95%E7%BA%BF%E7%A8%8B"><span class="toc-number">1.</span> <span class="toc-text">Redis为什么是单线程</span></a></li><li class="toc-item toc-level-2"><a class="toc-link" href="#BigKey"><span class="toc-number">2.</span> <span class="toc-text">BigKey</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#String%E5%92%8C%E4%BA%8C%E7%BA%A7%E7%BB%93%E6%9E%84"><span class="toc-number">2.1.</span> <span class="toc-text">String和二级结构</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%A1%88%E4%BE%8B"><span class="toc-number">2.2.</span> <span class="toc-text">案例</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%94%9F%E4%BA%A7%E8%B0%83%E4%BC%98"><span class="toc-number">2.3.</span> <span class="toc-text">生产调优</span></a></li></ol></li><li class="toc-item toc-level-2"><a class="toc-link" href="#%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99%E4%B8%80%E8%87%B4%E6%80%A7"><span class="toc-number">3.</span> <span class="toc-text">缓存双写一致性</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E6%95%B0%E6%8D%AE%E5%BA%93%E5%92%8C%E7%BC%93%E5%AD%98%E4%B8%80%E8%87%B4%E6%80%A7%E7%9A%84%E5%87%A0%E7%A7%8D%E6%9B%B4%E6%96%B0%E7%AD%96%E7%95%A5"><span class="toc-number">3.1.</span> <span class="toc-text">数据库和缓存一致性的几种更新策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4%E7%A7%8D%E6%9B%B4%E6%96%B0%E7%AD%96%E7%95%A5"><span class="toc-number">3.2.</span> <span class="toc-text">4种更新策略</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#4%E7%A7%8D%E6%9B%B4%E6%96%B0%E6%80%BB%E7%BB%93"><span class="toc-number">3.3.</span> <span class="toc-text">4种更新总结</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#Canal"><span class="toc-number">3.4.</span> <span class="toc-text">Canal</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#redis%E4%B8%8Emysql%E6%95%B0%E6%8D%AE%E5%8F%8C%E5%86%99%E4%B8%80%E8%87%B4%E6%80%A7%E6%A1%88%E4%BE%8B"><span class="toc-number">3.5.</span> <span class="toc-text">redis与mysql数据双写一致性案例</span></a></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix"><img src="https://spring.io/img/projects/spring-cloud.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Netflix"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix">SpringCloud Netflix</a><time datetime="2025-08-23T16:00:00.000Z" title="发表于 2025-08-24 00:00:00">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第二章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章">SpringCloud Alibaba 第二章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第三章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章">SpringCloud Alibaba 第三章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: true,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>

@@ -1,0 +1,583 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>RDB+AOF | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 R">
+<meta property="og:type" content="article">
+<meta property="og:title" content="RDB+AOF">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/2025/08/13/redis/RDB+AOF/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="redis数据数据持久化 为什么要用数据持久化？ 数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。 数据持久化的两种方式  AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。 R">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://pic.crazytaxii.com/Redis_Logo.png">
+<meta property="article:published_time" content="2025-08-12T16:00:00.000Z">
+<meta property="article:modified_time" content="2025-08-22T17:03:30.046Z">
+<meta property="article:author" content="Lazy">
+<meta property="article:tag" content="Redis">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://pic.crazytaxii.com/Redis_Logo.png"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "RDB+AOF",
+  "url": "https://mac2git.github.io/hexo-docs/2025/08/13/redis/RDB+AOF/",
+  "image": "https://pic.crazytaxii.com/Redis_Logo.png",
+  "datePublished": "2025-08-12T16:00:00.000Z",
+  "dateModified": "2025-08-22T17:03:30.046Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lazy",
+      "url": "https://mac2git.github.io/hexo-docs"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/RDB+AOF/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'RDB+AOF',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(https://pic.crazytaxii.com/Redis_Logo.png);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a><a class="nav-page-title" href="/hexo-docs/"><span class="site-name">RDB+AOF</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">RDB+AOF</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-08-12T16:00:00.000Z" title="发表于 2025-08-13 00:00:00">2025-08-13</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-08-22T17:03:30.046Z" title="更新于 2025-08-23 01:03:30">2025-08-23</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%90%8E%E7%AB%AF-Redis/">后端 Redis</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">4.1k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>12分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><h2 id="redis数据数据持久化"><a href="#redis数据数据持久化" class="headerlink" title="redis数据数据持久化"></a>redis数据数据持久化</h2><p><img src="/hexo-docs/images/redisImages/image-20250412134834950.png" alt="image-20250412134834950"></p>
+<p>为什么要用数据持久化？</p>
+<p>数据持久化可以在内存丢失或其他灾难性故障的情况下实现恢复。</p>
+<p>数据持久化的两种方式</p>
+<ol>
+<li>AOF：以日志的形式来记录每个写操作，将redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写入指令从前到后执行一次以完成数据的恢复工作。</li>
+<li>RDB（Redis 数据库）：RDB 持久性以指定的时间间隔执行数据集的时间点快照。</li>
+</ol>
+<h3 id="rdb（redis-database）"><a href="#rdb（redis-database）" class="headerlink" title="rdb（redis database）"></a>rdb（redis database）</h3><p><strong>能干嘛？</strong></p>
+<p>在指定的时间间隔内将内存中的数据集快照写入磁盘，也就是行话讲的Snapshot内存快照，它恢复时再将硬盘快照文件直接读回到内存里。Redis的数据都在内存中，保存备份时它执行的是全量快照，也就是说，把内存中的所有数据都记录到磁盘中，一锅端。</p>
+<p>Rdb保存的是dump.rdb文件</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412135541703.png" alt="image-20250412135541703"></p>
+<p>Redis6.0.16以下</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412135626311.png" alt="image-20250412135626311"></p>
+<p>Redis6.2以及Redis-7.0.0</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412135716317.png" alt="image-20250412135716317"></p>
+<h4 id="自动触发"><a href="#自动触发" class="headerlink" title="自动触发"></a>自动触发</h4><ol>
+<li>redis7版本，按照redis.conf里配置的save&lt;seconds&gt;&lt;changes&gt;</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250412135904456.png" alt="image-20250412135904456"></p>
+<ol start="2">
+<li>本案例5秒内2次修改</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250412140300483.png" alt="image-20250412140300483"></p>
+<ol start="3">
+<li>修改dump文件保存路径</li>
+</ol>
+<p><img src="/hexo-docs/images/redisImages/image-20250412140334001.png" alt="image-20250412140334001"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412140539111.png" alt="image-20250412140539111"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412143040215.png" alt="image-20250412143040215"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412143204897.png" alt="image-20250412143204897"></p>
+<p>修改dump的默认文件名称</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412143515348.png" alt="image-20250412143515348"></p>
+<p>触发备份情况</p>
+<ol>
+<li><img src="/hexo-docs/images/redisImages/image-20250412143957147.png" alt="image-20250412143957147"></li>
+<li><img src="/hexo-docs/images/redisImages/image-20250412144015323.png" alt="image-20250412144015323"></li>
+</ol>
+<p>如何恢复？</p>
+<ol>
+<li><p>将备份文件（dump6379.rdb）移动到redis安装目录并启动服务即可</p>
+</li>
+<li><p>备份成功后故意用flushdb清空redis，看看是否可以恢复数据</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412144353554.png" alt="image-20250412144353554"></p>
+<ol>
+<li><p>结论</p>
+<p>执行flushdb&#x2F;flushall命令也会产生dump.rdb文件，但是里面是空的，无意义</p>
+</li>
+</ol>
+</li>
+<li><p>物理恢复，一定服务和备份<strong>分级隔离</strong></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412144525191.png" alt="image-20250412144525191">不可以把备份文件dump.rdb和生产redis服务器放在同一台机器，必须分开各自存储，以防生产机物理损坏后备份文件也挂了。</p>
+</li>
+</ol>
+<p>注意：</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412145620989.png" alt="image-20250412145620989"></p>
+<p>执行quit命令就会写入dump文件，建议保存好数据，修改文件名或后缀名，或者备份文件，以免文件被覆盖</p>
+<h4 id="手动触发"><a href="#手动触发" class="headerlink" title="手动触发"></a>手动触发</h4><p>redis提供了两个命令来生成RDB文件，分别是save和bgsave</p>
+<p><strong>save（不推荐使用）</strong>：</p>
+<p>在主程序中执行<strong>会阻塞</strong>当前redis服务器，直到持久化工作完成执行save命令期间，redis不能处理其他命令，线上禁止使用。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412160029456.png" alt="image-20250412160029456"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412160456020.png" alt="image-20250412160456020"></p>
+<p><strong>bgsave（默认）</strong>：</p>
+<p>redis会在后台异步进行快照操作，<strong>不阻塞</strong>快照同时还可以响应客户端请求，该触发方式会fork一个子进程由子进程复制持久化过程</p>
+<p>redis会使用bgsave对当前内存中的所有数据做快照，这个操作是子进程在后台完成的，这就允许主进程同时可以修改数据。</p>
+<p><strong>fork是什么？</strong></p>
+<p> 在Linux程序中，fork()会产生一个和父进程完全相同的子进程，但子进程在此后多会exec系统调用，出于效率考虑，尽量避免膨胀。</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412160045041.png" alt="image-20250412160045041"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412160715667.png" alt="image-20250412160715667"></p>
+<p><strong>lastsave</strong>：可以通过lastsave命令获取最后一次成功执行快照的时间</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412160833207.png" alt="image-20250412160833207"></p>
+<h4 id="优势"><a href="#优势" class="headerlink" title="优势"></a>优势</h4><p><img src="/hexo-docs/images/redisImages/image-20250412162222408.png" alt="image-20250412162222408"></p>
+<ol>
+<li>适合大规模的数据恢复</li>
+<li>按照业务定时备份</li>
+<li>对数据完整性和一致性要求不高</li>
+<li>RDB文件在内存中的加载速度要比 AOF 快得多</li>
+</ol>
+<h4 id="劣势"><a href="#劣势" class="headerlink" title="劣势"></a>劣势</h4><p><img src="/hexo-docs/images/redisImages/image-20250412162355639.png" alt="image-20250412162355639"></p>
+<ol>
+<li>在一定间隔时间做一次备份，所以如果redis意外down掉的话，就会丢失从当前至最近一次快照期间的数据，快照之间的数据会丢失</li>
+<li>内存数据的全量同步，如果数据量太大会导致 I&#x2F;O 严重影响服务器性能</li>
+<li>RDB 依赖于主进程的 fork，在更大的数据集中，这可能会导致服务请求的瞬间延迟。fork的时候内存中的数据被克隆了一份，大致2倍的膨胀性，需要考虑</li>
+</ol>
+<p><strong>数据丢失案例</strong>：</p>
+<p>正常录入数据</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412163907395.png" alt="image-20250412163907395"></p>
+<p>使用kill -9杀死进程</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412163947557.png" alt="image-20250412163947557"></p>
+<p>重启服务后，查看数据是否丢失</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412164019685.png" alt="image-20250412164019685"></p>
+<h4 id="如何检测并修复dump-rdb文件"><a href="#如何检测并修复dump-rdb文件" class="headerlink" title="如何检测并修复dump.rdb文件"></a>如何检测并修复dump.rdb文件</h4><p><img src="/hexo-docs/images/redisImages/image-20250412164706643.png" alt="image-20250412164706643"></p>
+<h4 id="哪些情况会触发RDB快照"><a href="#哪些情况会触发RDB快照" class="headerlink" title="哪些情况会触发RDB快照"></a>哪些情况会触发RDB快照</h4><ol>
+<li>配置文件中默认的快照配置</li>
+<li>手动 save&#x2F;bgsave 命令</li>
+<li>执行 flushall&#x2F;flushdb 命令也会产生 dump.rdb 文件，但这里面是空的，无意义</li>
+<li>执行 shutdown 且没有设置开启 AOF 持久化</li>
+<li>主从复制时，主节点自动触发</li>
+</ol>
+<h4 id="如何禁用快照"><a href="#如何禁用快照" class="headerlink" title="如何禁用快照"></a>如何禁用快照</h4><ol>
+<li><p>动态所有停止 RDB 保存规则的方法：<code>redis-cli config set save</code> “”</p>
+</li>
+<li><p>快照禁用</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412165053214.png" alt="image-20250412165053214"></p>
+</li>
+</ol>
+<h4 id="RDB-优化配置项"><a href="#RDB-优化配置项" class="headerlink" title="RDB 优化配置项"></a>RDB 优化配置项</h4><p>配置文件<code>SNAPSHOTTING</code>模块</p>
+<p>save &lt;seconds&gt;&lt;changes&gt;</p>
+<p><code>dbfilename</code></p>
+<p><code>dir</code></p>
+<p><code>stop-writes-on-bgsave-error</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412170306543.png" alt="image-20250412170306543"></p>
+<p>默认yes</p>
+<p>如果配置成no，表示你不在乎数据不一致或者有其他的手段发现和控制这种不一致，那么在快照写入失败时，</p>
+<p>也能确保redis继续接受新的写请求</p>
+<p><code>rdbcompression</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412170338012.png" alt="image-20250412170338012"></p>
+<p>默认yes</p>
+<p>对于存储到磁盘中的快照，可以设置是否进行压缩存储。如果是的话，redis会采用LZF算法进行压缩。 如果你不想消耗CPU来进行压缩的话，可以设置为关闭此功能 </p>
+<p><code>rdbchecksum</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412170442335.png" alt="image-20250412170442335"></p>
+<p>默认yes</p>
+<p>在存储快照后，还可以让redis使用CRC64算法来进行数据校验，但是这样做会增加大约10%的性能消耗，如果希望获取到最大的性能提升，可以关闭此功能</p>
+<p><code>rdb-del-sync-files</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250412170506875.png" alt="image-20250412170506875"></p>
+<p>rdb-del-sync-files：在没有持久性的情况下删除复制中使用的RDB文件启用。默认情况下no，此选项是禁用的。</p>
+<h4 id="关闭RDB持久化"><a href="#关闭RDB持久化" class="headerlink" title="关闭RDB持久化"></a>关闭RDB持久化</h4><p><img src="/hexo-docs/images/redisImages/image-20250413151754846.png" alt="image-20250413151754846"></p>
+<h4 id="总结"><a href="#总结" class="headerlink" title="总结"></a>总结</h4><p><img src="/hexo-docs/images/redisImages/image-20250412170541034.png" alt="image-20250412170541034"></p>
+<h3 id="AOF（Append-Only-File）"><a href="#AOF（Append-Only-File）" class="headerlink" title="AOF（Append Only File）"></a>AOF（Append Only File）</h3><p>以日志的形式来记录每个写操作，将Redis执行过的所有写指令记录下来（读操作不记录），只许追加文件但不可以改写文件，redis启动之初会读取该文件重新构建数据，换言之，redis重启的话就根据日志文件的内容将写指令从前到后执行一次以完成数据的恢复工作</p>
+<p>默认情况下，redis是没有开启AOF（append only file）的。开启AOF 功能需要设置配置：<code>appendonly yes</code></p>
+<p>AOF 保存的是appendonly.aof文件</p>
+<h4 id="AOF-持久化工作流程："><a href="#AOF-持久化工作流程：" class="headerlink" title="AOF 持久化工作流程："></a><strong>AOF 持久化工作流程</strong>：</h4><p><img src="/hexo-docs/images/redisImages/image-20250413140942560.png" alt="image-20250413140942560"></p>
+<table>
+<thead>
+<tr>
+<th>1</th>
+<th>Client作为命令的来源，会有多个源头以及源源不断的请求命令。</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>2</td>
+<td>在这些命令到达Redis Server 以后并不是直接写入AOF文件，会将其这些命令先放入AOF缓存中进行保存。这里的AOF缓冲区实际上是内存中的一片区域，存在的目的是当这些命令达到一定量以后再写入磁盘，避免频繁的磁盘IO操作。</td>
+</tr>
+<tr>
+<td>3</td>
+<td>AOF缓冲会根据AOF缓冲区***同步文件的三种写回策略***将命令写入磁盘上的AOF文件。</td>
+</tr>
+<tr>
+<td>4</td>
+<td>随着写入AOF内容的增加为避免文件膨胀，会根据规则进行命令的合并(又称***AOF重写)***，从而起到AOF文件压缩的目的。</td>
+</tr>
+<tr>
+<td>5</td>
+<td>当Redis Server 服务器重启的时候会从AOF文件载入数据。</td>
+</tr>
+</tbody></table>
+<h4 id="AOF缓冲区三种写回策略"><a href="#AOF缓冲区三种写回策略" class="headerlink" title="AOF缓冲区三种写回策略"></a>AOF缓冲区三种写回策略</h4><ol>
+<li><p>always</p>
+<p>同步写回，每个写命令执行完成立刻同步地将日志写回磁盘</p>
+</li>
+<li><p>everysec</p>
+<p>每秒写回，每个写命令执行完，只是先把日志写到 AOF 文件的内存缓冲区，每隔1秒把缓冲区中的内容写入磁盘</p>
+</li>
+<li><p>no：操作系统控制的写回，每个写命令执行完，只是先把日志写到 AOF 文件的内存缓冲区，由操作系统决定何时将缓冲区内容写回磁盘</p>
+</li>
+</ol>
+<p><strong>三种写回策略总结</strong>：</p>
+<table>
+<thead>
+<tr>
+<th align="center">配置项</th>
+<th align="center">写回时机</th>
+<th align="center">优点</th>
+<th align="center">缺点</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="center">Always</td>
+<td align="center">同步写回</td>
+<td align="center">可靠性高，数据基本不丢失</td>
+<td align="center">每个写命令都要落盘，性能影响较大</td>
+</tr>
+<tr>
+<td align="center">Everysec</td>
+<td align="center">每秒写回</td>
+<td align="center">性能适中</td>
+<td align="center">宕机时丢失1秒内的数据</td>
+</tr>
+<tr>
+<td align="center">No</td>
+<td align="center">操作系统控制的写回</td>
+<td align="center">性能好</td>
+<td align="center">宕机时丢失数据较多</td>
+</tr>
+</tbody></table>
+<h4 id="AOF配置-启动-修复-恢复（redis6-vs-redis7中的区别）"><a href="#AOF配置-启动-修复-恢复（redis6-vs-redis7中的区别）" class="headerlink" title="AOF配置&#x2F;启动&#x2F;修复&#x2F;恢复（redis6 vs redis7中的区别）"></a>AOF配置&#x2F;启动&#x2F;修复&#x2F;恢复（redis6 vs redis7中的区别）</h4><p>配置文件说明（6 vs 7）</p>
+<ol>
+<li><p>如何开启 aof</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413142055377.png" alt="image-20250413142055377"></p>
+</li>
+<li><p>使用默认写回方式，每秒钟</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413142350177.png" alt="image-20250413142350177"></p>
+</li>
+<li><p>aof文件-保存路径</p>
+<ol>
+<li><p>redis6</p>
+<p>aof 保存文件的位置和RDB保存文件的位置一样，都是通过 redis.conf 配置文件的dir配置</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413142506831.png" alt="image-20250413142506831"></p>
+</li>
+<li><p>redis7之后最新</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413143145004.png" alt="image-20250413143145004"></p>
+<p>去除dumpfiles</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413143241436.png" alt="image-20250413143241436"></p>
+</li>
+<li><p>aof文件-保存名称</p>
+<ol>
+<li><p>redis6：有且仅有一个</p>
+</li>
+<li><p>redis7：Multi Part AOF 的设计</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413143617617.png" alt="image-20250413143617617"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413143420437.png" alt="image-20250413143420437"></p>
+<ol>
+<li>base 基本文件</li>
+<li>incr 增量文件</li>
+<li>manifest 清单文件</li>
+</ol>
+</li>
+<li><p>redis7.0config 中对应的配置项</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413143519513.png" alt="image-20250413143519513"></p>
+</li>
+</ol>
+</li>
+</ol>
+<p>正常恢复</p>
+<ol>
+<li><p>启动：设置yes</p>
+<p>修改默认的appendonly no ，改为 yes</p>
+</li>
+<li><p>写操作继续，生成 aof 文件到指定的目录</p>
+</li>
+<li><p>恢复1：重启redis 然后重新加载，结果 ok</p>
+</li>
+<li><p>恢复2：</p>
+<ol>
+<li>写入数据进redis，然后flushdb+shutdown服务器</li>
+<li>新生成 dump和aof</li>
+<li>备份新生成的 aof.bak，然后删除 dump&#x2F;aof 再恢复</li>
+<li>重启redis然后重新加载试试</li>
+<li>停止服务器，拿出我们的备份修改后再重新启动服务器看看</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+<h5 id="正常恢复："><a href="#正常恢复：" class="headerlink" title="正常恢复："></a>正常恢复：</h5><p> 可以看到我们的rdb和aof都已经写入成功</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413150409480.png" alt="image-20250413150409480"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413152812181.png" alt="image-20250413152812181"></p>
+<p>当我们在添加一个数据，看看这个数据被记录到那个文件里面了！</p>
+<p> 我们先复制一份</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250413150618569.png" alt="image-20250413150618569"></p>
+<p> 我们关闭redis服务器</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250413150853690.png" alt="image-20250413150853690"></p>
+<p> 删除<code>appendonlydir</code>，因为我们模拟恢复，因为进行<code>flushdb</code>清空，然后<code>shutdown</code>关闭服务器的时候也会写入<code>appendonlydir</code>，所以我们要删除<code>appendonlydir</code>，因为这是个空文件</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250413151115020.png" alt="image-20250413151115020"></p>
+<p> 修改<code>appendonlydir.bak</code>文件，改为<code>apppendonlydir</code></p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250413151219297.png" alt="image-20250413151219297"></p>
+<p> 在启动redis服务器试试，看看有没有恢复</p>
+<p> <img src="/hexo-docs/images/redisImages/image-20250413151341369.png" alt="image-20250413151341369"></p>
+<p>异常恢复</p>
+<ol>
+<li>故意乱写正常的 AOF 文件</li>
+<li>模拟网络闪断写 error</li>
+<li>重启 redis 之后就会进行 AOF 文件的载入，发现启动都不行</li>
+<li>异常修复命令：<code>redis-check-aof --fix</code>进行修复</li>
+<li>重启 ok</li>
+</ol>
+<h5 id="异常修复"><a href="#异常修复" class="headerlink" title="异常修复"></a>异常修复</h5><p>从上述可以看出我们的写入的数据会保存在，<code>appendonly.aof.1.incr.aof</code>中，如果我们在<code>appendonly.aof.1.incr.aof</code>里面乱加入一些东西，看看可以恢复吗？</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413161250807.png" alt="image-20250413161250807"></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413161351896.png" alt="image-20250413161351896"></p>
+<p>我们把数据清空，在shutdown，然后重启redis-server</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413161744835.png" alt="image-20250413161744835"></p>
+<p>我们使用<code>redis-check-aof --fix 文件名进行修复</code></p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413161939967.png" alt="image-20250413161939967"></p>
+<p>我们启动redis-server看看， 有没有</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413162918039.png" alt="image-20250413162918039"></p>
+<p>可以看到我们的redis修复成功了！</p>
+<h4 id="优势-1"><a href="#优势-1" class="headerlink" title="优势"></a>优势</h4><p><img src="/hexo-docs/images/redisImages/image-20250413164812270.png" alt="image-20250413164812270"></p>
+<p>更好的保护数据不丢失、性能高、可做紧急恢复</p>
+<h4 id="劣势-1"><a href="#劣势-1" class="headerlink" title="劣势"></a>劣势</h4><p><img src="/hexo-docs/images/redisImages/image-20250413164920992.png" alt="image-20250413164920992"></p>
+<ol>
+<li>相同数据集的数据而言aof文件要远大于rdb文件，恢复速度慢于rdb</li>
+<li>aof运行效率要，慢于rdb，每秒同步策略效率较好，不同于效率和rdb相同</li>
+</ol>
+<h4 id="AOF重写机制"><a href="#AOF重写机制" class="headerlink" title="AOF重写机制"></a>AOF重写机制</h4><p>由于AOF持久化是Redis不断将写命令记录到 AOF 文件中，随着Redis不断的进行，AOF 的文件会越来越大，文件越大，占用服务器内存越大以及 AOF 恢复要求时间越长。</p>
+<p>为了解决这个问题，Redis新增了重写机制，当AOF文件的大小超过所设定的峰值时，Redis就会<strong>自动</strong>启动AOF文件的内容压缩，只保留可以恢复数据的最小指令集或者可以手动使用命令 bgrewriteaof 来重新。</p>
+<p>一句话：启动 AOF文件的内容压缩，只保留可以恢复数据的最小指令集</p>
+<p><strong>举个例子：</strong>比如有个key </p>
+<p>一开始你 set k1 v1</p>
+<p>然后改成 set k1 v2</p>
+<p>最后改成 set k1 v3</p>
+<p>如果不重写，那么这3条语句都在aof文件中，内容占空间不说启动的时候都要执行一遍，共计3条命令；</p>
+<p>但是，我们实际效果只需要set k1 v3这一条，所以，开启重写后，只需要保存set k1 v3就可以了只需要保留最后一次修改值，相当于给aof文件瘦身减肥，性能更好。AOF重写不仅降低了文件的占用空间，同时更小的AOF也可以更快地被Redis加载。</p>
+<h5 id="触发机制"><a href="#触发机制" class="headerlink" title="触发机制"></a>触发机制</h5><p><img src="/hexo-docs/images/redisImages/image-20250413165313170.png" alt="image-20250413165313170"></p>
+<blockquote>
+<p>注意 ，同时满足，且的关系才会触发</p>
+<ol>
+<li>根据上次重写后的aof大小，判断当前aof大小是不是增长了1倍</li>
+<li>重写时满足的文件大小</li>
+</ol>
+</blockquote>
+<h6 id="自动触发-1"><a href="#自动触发-1" class="headerlink" title="自动触发"></a>自动触发</h6><p>满足配置文件中的选项后，redis会记录上次重写时的aof大小，默认配置是当aof文件大小是上次rewrite后大小的一倍且文件大于64m时</p>
+<p>示例：</p>
+<ol>
+<li><p>修改最小重写大小，因为做实例，所以改的少一点</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413172308803.png" alt="image-20250413172308803"></p>
+</li>
+<li><p>关闭 rdb和aof的混合模式</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413172712408.png" alt="image-20250413172712408"></p>
+</li>
+<li><p>删除以前的aof和rdb，排除干扰项</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413172848044.png" alt="image-20250413172848044"></p>
+</li>
+<li><p>数据压缩进行测试</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413173333430.png" alt="image-20250413173333430"></p>
+</li>
+<li><p><code>appendonly.aof.3.base.rdb</code>文件，就是存放着我们最后一次对key写入的数据</p>
+</li>
+</ol>
+<h6 id="手动触发-1"><a href="#手动触发-1" class="headerlink" title="手动触发"></a>手动触发</h6><p>客户端向服务器发送<code>bgrewriteao</code>命令</p>
+<p>示例：</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413173744340.png" alt="image-20250413173744340"></p>
+<h6 id="结论"><a href="#结论" class="headerlink" title="结论"></a>结论</h6><p><img src="/hexo-docs/images/redisImages/image-20250413173835423.png" alt="image-20250413173835423"></p>
+<h5 id="重写原理"><a href="#重写原理" class="headerlink" title="重写原理"></a>重写原理</h5><ol>
+<li>在重写开始前，redis会创建一个“重写子进程”，这个子进程会读取现有的AOF文件，并将其包含的指令进行分析压缩并写入到一个临时文件中。</li>
+<li>与此同时，主进程会将新接收到的写指令一边累积到内存缓冲区中，一边继续写入到原有的AOF文件中，这样做是保证原有的AOF文件的可用性，避免在重写过程中出现意外。</li>
+<li>当“重写子进程”完成重写工作后，它会给父进程发一个信号，父进程收到信号后就会将内存中缓存的写指令追加到新AOF文件中</li>
+<li>当追加结束后，redis就会用新AOF文件来代替旧AOF文件，之后再有新的写指令，就都会追加到新的AOF文件中</li>
+<li>重写aof文件的操作，并没有读取旧的aof文件，而是将整个内存中的数据库内容用命令的方式重写了一个新的aof文件，这点和快照有点类似</li>
+</ol>
+<h5 id="AOF-优化配置项"><a href="#AOF-优化配置项" class="headerlink" title="AOF 优化配置项"></a>AOF 优化配置项</h5><p>配置文件 append only mode 模块</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413173933121.png" alt="image-20250413173933121"></p>
+<h5 id="总结-1"><a href="#总结-1" class="headerlink" title="总结"></a>总结</h5><p><img src="/hexo-docs/images/redisImages/image-20250413173954069.png" alt="image-20250413173954069"></p>
+<h3 id="RDB-AOF-混合持久化"><a href="#RDB-AOF-混合持久化" class="headerlink" title="RDB-AOF 混合持久化"></a>RDB-AOF 混合持久化</h3><p>RDB和AOF可以同时共存，但是AOF的优先级高于RDB的优先级</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413175315000.png" alt="image-20250413175315000"></p>
+<p><strong>如何选？</strong></p>
+<p>RDB持久化方式能够在指定的时间间隔能对你的数据进行快照存储</p>
+<p>AOF持久化方式记录每次对服务器写的操作，当服务器重启的时候会重新执行这些命令来恢复原始的数据，AOF命令以redis协议追加保存每次写的操作到文件末尾</p>
+<p><strong>同时开启两种持久化方式</strong></p>
+<p>在这种情况下，当redis重启的时候会优先载入 AOF 文件来恢复原始的数据，因为在通常情况下 AOF 文件保存的数据集要比 RDB 文件保存的数据集要完整</p>
+<p>RDB的数据不实时，同时使用两者服务器重启也只会找 AOF 文件。那要不要只是用 AOF 呢？ 官网建议不要，因为 RDB 更适合用于备份数据（AOF在不断变化不好备份），留着 rdb 作为一个以防万一的手段。</p>
+<p><strong>推荐方式</strong>：</p>
+<p>结合了RDB和AOF的优点，既能快速加载又能避免丢失过多的数据。</p>
+<ol>
+<li><p>开启混合方式设置</p>
+<p>设置aof-use-rdb-preamble的值为 yes  yes表示开启，设置为no表示禁用</p>
+</li>
+<li><p>RDB+AOF的混合方式———&gt; 结论：RDB镜像做全量持久化，AOF做增量持久化</p>
+<p>先使用RDB进行快照存储，然后使用AOF持久化记录所有的写操作，当重写策略满足或手动触发重写的时候，将最新的数据存储为新的RDB记录。这样的话，重启服务的时候会从RDB和AOF两部分恢复数据，既保证了数据完整性，又提高了恢复数据的性能。简单来说：混合持久化方式产生的文件一部分是RDB格式，一部分是AOF格式。**—-》AOF包括了RDB头部+AOF混写**</p>
+<p><img src="/hexo-docs/images/redisImages/image-20250413175941896.png" alt="image-20250413175941896"></p>
+<h4 id="纯缓存模式"><a href="#纯缓存模式" class="headerlink" title="纯缓存模式"></a>纯缓存模式</h4><p>同时关闭 RDB+AOF</p>
+<ol>
+<li>save “”<ol>
+<li>禁用 rdb</li>
+<li>禁用 rdb 持久化模式下，我们仍然可以使用命令 save、bgsave 生成 rdb 文件</li>
+</ol>
+</li>
+<li>appendonly no<ol>
+<li>禁用 aof</li>
+<li>禁用 aof 持久化模式下，我们仍然可以使用命令 bgrewriteaof 生成 aof文件</li>
+</ol>
+</li>
+</ol>
+</li>
+</ol>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs">Lazy</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs/2025/08/13/redis/RDB+AOF/">https://mac2git.github.io/hexo-docs/2025/08/13/redis/RDB+AOF/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://mac2git.github.io/hexo-docs" target="_blank">Lazy的个人博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/hexo-docs/tags/Redis/">Redis</a></div><div class="post-share"><div class="social-share" data-image="https://pic.crazytaxii.com/Redis_Logo.png" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">BigKey和缓存双写</div></div><div class="info-2"><div class="info-item-1">Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。—貌似  2020年5月版本的6.0.x后及2022年出的7.0版本后，告别了大家印象中的单线程，用一种全新的多线程来解决问题。—实锤   几个里程碑的redis版本！  5.0版本是直接升级到6.0版本，对于这个激进的升级，Redis之父antirez表现得很有信心和兴奋， 所以第一时间发文来阐述6.0的一些重大功能”Redis 6.0.0 GA is out!” 当然，Redis7.0后版本更加厉害  Redis是单线程 主要是指Redis的网络IO和键值对读写是由一个线程来完成的，Redis在处理客户端的请求时包括获取 (socket 读)、解析、执行、内容返回 (socket 写...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">RedLock算法和底层源码分析和缓存淘汰策略</div></div><div class="info-2"><div class="info-item-1">上一章自研的redis锁对于一般中小公司，不是特别高并发场景足够用了，单机redis小业务也撑得住。但是对于特别高并发场景的话，就得使用Redisson了 Redis分布式锁-RedLock红锁算法（Distributed locks with Redis）官网：Redis 的分布式锁 |文档 说明：  为什么学习这个？怎样产生的？   线程 1 首先获取锁成功，将键值对写入 redis 的 master 节点，在 redis 将该键值对同步到 slave 节点之前，master 发生了故障；redis 触发故障转移，其中一个 slave 升级为新的 master，此时新上位的master并不包含线程1写入的键值对，因此线程 2 尝试获取锁也可以成功拿到锁，此时相当于有两个线程获取到了锁，可能会导致各种预期之外的情况发生，例如最常见的脏数据。  我们加的是排它独占锁，同一时间只能有一个建redis锁成功并持有锁，严禁出现2个以上的请求线程拿到锁。危险的！ RedLock算法设计理念Redis也提供了Redlock算法，用来实现基于多个实例的分布式锁。锁变量由多个实例维护，即使有实...</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/Redlock%E7%AE%97%E6%B3%95%E5%92%8C%E5%BA%95%E5%B1%82%E6%BA%90%E7%A0%81%E5%88%86%E6%9E%90%E5%92%8C%E7%BC%93%E5%AD%98%E6%B7%98%E6%B1%B0%E7%AD%96%E7%95%A5/" title="RedLock算法和底层源码分析和缓存淘汰策略"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">RedLock算法和底层源码分析和缓存淘汰策略</div></div><div class="info-2"><div class="info-item-1">上一章自研的redis锁对于一般中小公司，不是特别高并发场景足够用了，单机redis小业务也撑得住。但是对于特别高并发场景的话，就得使用Redisson了 Redis分布式锁-RedLock红锁算法（Distributed locks with Redis）官网：Redis 的分布式锁 |文档 说明：  为什么学习这个？怎样产生的？   线程 1 首先获取锁成功，将键值对写入 redis 的 master 节点，在 redis 将该键值对同步到 slave 节点之前，master 发生了故障；redis 触发故障转移，其中一个 slave 升级为新的 master，此时新上位的master并不包含线程1写入的键值对，因此线程 2 尝试获取锁也可以成功拿到锁，此时相当于有两个线程获取到了锁，可能会导致各种预期之外的情况发生，例如最常见的脏数据。  我们加的是排它独占锁，同一时间只能有一个建redis锁成功并持有锁，严禁出现2个以上的请求线程拿到锁。危险的！ RedLock算法设计理念Redis也提供了Redlock算法，用来实现基于多个实例的分布式锁。锁变量由多个实例维护，即使有实...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/bigkey%E5%92%8C%E7%BC%93%E5%AD%98%E5%8F%8C%E5%86%99/" title="BigKey和缓存双写"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">BigKey和缓存双写</div></div><div class="info-2"><div class="info-item-1">Redis为什么是单线程这种问法其实并不严谨，为啥这么说呢? Redis的版本很多3.x、4.x、6.x，版本不同架构也是不同的，不限定版本问是否单线程也不太严谨。  版本3.x ，最早版本，也就是大家口口相传的redis是单线程，阳哥2016年讲解的redis就是3.X的版本。  版本4.x，严格意义来说也不是单线程，而是负责处理客户端请求的线程是单线程，但是开始加了点多线程的东西(异步删除)。—貌似  2020年5月版本的6.0.x后及2022年出的7.0版本后，告别了大家印象中的单线程，用一种全新的多线程来解决问题。—实锤   几个里程碑的redis版本！  5.0版本是直接升级到6.0版本，对于这个激进的升级，Redis之父antirez表现得很有信心和兴奋， 所以第一时间发文来阐述6.0的一些重大功能”Redis 6.0.0 GA is out!” 当然，Redis7.0后版本更加厉害  Redis是单线程 主要是指Redis的网络IO和键值对读写是由一个线程来完成的，Redis在处理客户端的请求时包括获取 (socket 读)、解析、执行、内容返回 (socket 写...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/index/" title="Redis基础"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">Redis基础</div></div><div class="info-2"><div class="info-item-1">什么是Redis？Redis 是一个内存数据存储，被数百万开发者用作缓存、向量数据库、文档数据库、流式引擎和消息代理。Redis 具有内置的复制和不同级别的磁盘持久化。它支持复杂的数据类型（例如，字符串、散列、列表、集合、有序集合和 JSON），并为这些数据类型定义了原子操作。 Redis 通常被称为数据结构服务器。这意味着 Redis 通过一组命令提供对可变数据结构的访问，这些命令通过 TCP 套接字和简单协议使用服务器-客户端模型发送。因此，不同的进程可以以共享的方式查询和修改相同的数据结构。 Redis 实现的数据结构具有一些特殊的属性：  Redis 会将其存储在磁盘上，即使它们总是被服务器内存中读取和修改。这意味着 Redis 速度快，但同时也非易失性。 数据结构的实现强调内存效率，因此 Redis 内部的数据结构可能比使用高级编程语言建模的相同数据结构模型使用更少的内存。 Redis 提供了一系列数据库中常见的功能，如复制、可调的持久性级别、集群和高度可用性。  下载Redis 命名规则： ​	版本号第二位如果是奇数，则为非稳定版本，如2.7、2.9、3.1 ​	版本...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/epoll%E5%87%BD%E6%95%B0%E5%92%8CIO%E5%A4%9A%E8%B7%AF%E5%A4%8D%E7%94%A8%E6%B7%B1%E5%BA%A6%E8%A7%A3%E6%9E%90/" title="epoll函数和IO多路复用深度解析"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">epoll函数和IO多路复用深度解析</div></div><div class="info-2"><div class="info-item-1">epoll 函数和 IO 多路复用深度解析没有 epoll 和 IO 多路复用之前多路复用要解决的问题并发多客户端连接，在多路复用之前最简单和典型的方案：同步阻塞网络IO模型 这种模式的特点就是用一个进程来处理一个网络连接(一个用户请求)，比如一段典型的示例代码如下。 直接调用 recv 函数从一个 socket 上读取数据。 int main()&#123; ... recv(sock, ...) //从用户角度来看非常简单，一个recv一用，要接收的数据就到我们手里了。&#125;  我们来总结一下这种方式： 优点： 就是这种方式非常容易让人理解，写起代码来非常的自然，符合人的直线型思维。 缺点： 就是性能差，每个用户请求到来都得占用一个进程来处理，来一个请求就要分配一个进程跟进处理， 类似一个学生配一个老师，一位患者配一个医生，可能吗？进程是一个很笨重的东西。一台服务器上创建不了多少个进程。 结论进程在 Linux 上是一个开销不小的家伙，先不说创建，光是上下文切换一次就得几个微秒。所以为了高效地对海量用户提供服务，必须要让一个进程能同时处理很多个 tcp 连接才行。现在假...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/hyperloglogGeoBitmap/" title="HyperLogLog&amp;Geo&amp;Bitmap"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">HyperLogLog&amp;Geo&amp;Bitmap</div></div><div class="info-2"><div class="info-item-1">统计类型有哪些？ 亿级系统中常见的四种统计  聚合统计 统计多个集合元素的聚合结果，就是前面的交集差集等集合统计   排序统计（zset） 在面对需要展示最新列表、排行榜等场景时，如果数据更新频繁或者需要分页显示，建议使用ZSet  因为可以使用分页，正反排序  二值统计（bitmap） 集合元素的取值就只有0和1两种，在钉钉上班签到打开的场景中，我们只用记录有签到（1）和没签到（0）  基数统计（hyperloglog） 指 统计一个集合不重复元素个数     HyperLogLog名词解释  什么是UV?  Unique Visitor，独立访客，一般理解为客户端IP 需要去重考虑，例如一个人一天访问了10次网站，一天的UV就是1   什么是PV?  Page View，页面浏览量 不用去重，例如一个人一天访问了10次网站，一天的PV就是10   什么是DAU?  Daily  Active User  日活跃用户量 登录或者使用了某个产品的用户数（去重复登录的用户），避免恶意刷单  常用于反映网站，互联网应用或者网络游戏的运营情况      什么是MAU？  Monthly...</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/13/redis/pub&sub/" title="pub&amp;sub(发布&amp;订阅)"><img class="cover" src="https://pic.crazytaxii.com/Redis_Logo.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-13</div><div class="info-item-2">pub&amp;sub(发布&amp;订阅)</div></div><div class="info-2"><div class="info-item-1">发布&#x2F;订阅是一种消息通信模式：发送者（publish）发送消息，订阅者（subscribe）接受消息，可以实现进程间的消息传递 Redis  可以实现消息中间件 MQ 的功能，通过发布订阅实现消息的引导和分流。不推荐使用该功能，专业的事情交给专业的中间件，redis就做好分布式缓存功能 能干嘛？  redis 客户端可以订阅任意数量的频道，类似我们微信关注多个公众号   当有新的消息通过 publish 命令发送给频道 channel1 时     总结： 发布&#x2F;订阅其实是一个轻量的队列，只不过数据不会被持久化，一般用来处理实时性较高的异步消息    常用命令  subscribe channel [channel...]   订阅给定的一个或多个频道的信息 推荐先执行订阅后再发布，订阅成功之前发布的消息是收不到的 订阅的客户端每次可以收到一个3个参数的消息 消息的种类 始发频道的名称 实际的消息内容         publish channel message    发布消息到指定的频道    psubscribe pattern[pattern...] ...</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">22</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">10</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">6</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-2"><a class="toc-link" href="#redis%E6%95%B0%E6%8D%AE%E6%95%B0%E6%8D%AE%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">1.</span> <span class="toc-text">redis数据数据持久化</span></a><ol class="toc-child"><li class="toc-item toc-level-3"><a class="toc-link" href="#rdb%EF%BC%88redis-database%EF%BC%89"><span class="toc-number">1.1.</span> <span class="toc-text">rdb（redis database）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E8%87%AA%E5%8A%A8%E8%A7%A6%E5%8F%91"><span class="toc-number">1.1.1.</span> <span class="toc-text">自动触发</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E8%A7%A6%E5%8F%91"><span class="toc-number">1.1.2.</span> <span class="toc-text">手动触发</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BC%98%E5%8A%BF"><span class="toc-number">1.1.3.</span> <span class="toc-text">优势</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8A%A3%E5%8A%BF"><span class="toc-number">1.1.4.</span> <span class="toc-text">劣势</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E6%A3%80%E6%B5%8B%E5%B9%B6%E4%BF%AE%E5%A4%8Ddump-rdb%E6%96%87%E4%BB%B6"><span class="toc-number">1.1.5.</span> <span class="toc-text">如何检测并修复dump.rdb文件</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%93%AA%E4%BA%9B%E6%83%85%E5%86%B5%E4%BC%9A%E8%A7%A6%E5%8F%91RDB%E5%BF%AB%E7%85%A7"><span class="toc-number">1.1.6.</span> <span class="toc-text">哪些情况会触发RDB快照</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%A6%82%E4%BD%95%E7%A6%81%E7%94%A8%E5%BF%AB%E7%85%A7"><span class="toc-number">1.1.7.</span> <span class="toc-text">如何禁用快照</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#RDB-%E4%BC%98%E5%8C%96%E9%85%8D%E7%BD%AE%E9%A1%B9"><span class="toc-number">1.1.8.</span> <span class="toc-text">RDB 优化配置项</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%85%B3%E9%97%ADRDB%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">1.1.9.</span> <span class="toc-text">关闭RDB持久化</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E6%80%BB%E7%BB%93"><span class="toc-number">1.1.10.</span> <span class="toc-text">总结</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#AOF%EF%BC%88Append-Only-File%EF%BC%89"><span class="toc-number">1.2.</span> <span class="toc-text">AOF（Append Only File）</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#AOF-%E6%8C%81%E4%B9%85%E5%8C%96%E5%B7%A5%E4%BD%9C%E6%B5%81%E7%A8%8B%EF%BC%9A"><span class="toc-number">1.2.1.</span> <span class="toc-text">AOF 持久化工作流程：</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#AOF%E7%BC%93%E5%86%B2%E5%8C%BA%E4%B8%89%E7%A7%8D%E5%86%99%E5%9B%9E%E7%AD%96%E7%95%A5"><span class="toc-number">1.2.2.</span> <span class="toc-text">AOF缓冲区三种写回策略</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#AOF%E9%85%8D%E7%BD%AE-%E5%90%AF%E5%8A%A8-%E4%BF%AE%E5%A4%8D-%E6%81%A2%E5%A4%8D%EF%BC%88redis6-vs-redis7%E4%B8%AD%E7%9A%84%E5%8C%BA%E5%88%AB%EF%BC%89"><span class="toc-number">1.2.3.</span> <span class="toc-text">AOF配置&#x2F;启动&#x2F;修复&#x2F;恢复（redis6 vs redis7中的区别）</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E6%AD%A3%E5%B8%B8%E6%81%A2%E5%A4%8D%EF%BC%9A"><span class="toc-number">1.2.3.1.</span> <span class="toc-text">正常恢复：</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E5%BC%82%E5%B8%B8%E4%BF%AE%E5%A4%8D"><span class="toc-number">1.2.3.2.</span> <span class="toc-text">异常修复</span></a></li></ol></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E4%BC%98%E5%8A%BF-1"><span class="toc-number">1.2.4.</span> <span class="toc-text">优势</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#%E5%8A%A3%E5%8A%BF-1"><span class="toc-number">1.2.5.</span> <span class="toc-text">劣势</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#AOF%E9%87%8D%E5%86%99%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.6.</span> <span class="toc-text">AOF重写机制</span></a><ol class="toc-child"><li class="toc-item toc-level-5"><a class="toc-link" href="#%E8%A7%A6%E5%8F%91%E6%9C%BA%E5%88%B6"><span class="toc-number">1.2.6.1.</span> <span class="toc-text">触发机制</span></a><ol class="toc-child"><li class="toc-item toc-level-6"><a class="toc-link" href="#%E8%87%AA%E5%8A%A8%E8%A7%A6%E5%8F%91-1"><span class="toc-number">1.2.6.1.1.</span> <span class="toc-text">自动触发</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E6%89%8B%E5%8A%A8%E8%A7%A6%E5%8F%91-1"><span class="toc-number">1.2.6.1.2.</span> <span class="toc-text">手动触发</span></a></li><li class="toc-item toc-level-6"><a class="toc-link" href="#%E7%BB%93%E8%AE%BA"><span class="toc-number">1.2.6.1.3.</span> <span class="toc-text">结论</span></a></li></ol></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E9%87%8D%E5%86%99%E5%8E%9F%E7%90%86"><span class="toc-number">1.2.6.2.</span> <span class="toc-text">重写原理</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#AOF-%E4%BC%98%E5%8C%96%E9%85%8D%E7%BD%AE%E9%A1%B9"><span class="toc-number">1.2.6.3.</span> <span class="toc-text">AOF 优化配置项</span></a></li><li class="toc-item toc-level-5"><a class="toc-link" href="#%E6%80%BB%E7%BB%93-1"><span class="toc-number">1.2.6.4.</span> <span class="toc-text">总结</span></a></li></ol></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#RDB-AOF-%E6%B7%B7%E5%90%88%E6%8C%81%E4%B9%85%E5%8C%96"><span class="toc-number">1.3.</span> <span class="toc-text">RDB-AOF 混合持久化</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#%E7%BA%AF%E7%BC%93%E5%AD%98%E6%A8%A1%E5%BC%8F"><span class="toc-number">1.3.1.</span> <span class="toc-text">纯缓存模式</span></a></li></ol></li></ol></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix"><img src="https://spring.io/img/projects/spring-cloud.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Netflix"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/SpringCloud/netflix/SpringCloudNetflix/" title="SpringCloud Netflix">SpringCloud Netflix</a><time datetime="2025-08-23T16:00:00.000Z" title="发表于 2025-08-24 00:00:00">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第二章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter02/" title="SpringCloud Alibaba 第二章">SpringCloud Alibaba 第二章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章"><img src="https://sca.aliyun.com/sca-icon.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="SpringCloud Alibaba 第三章"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/23/SpringCloud/alibaba/chapter03/" title="SpringCloud Alibaba 第三章">SpringCloud Alibaba 第三章</a><time datetime="2025-08-22T16:00:00.000Z" title="发表于 2025-08-23 00:00:00">2025-08-23</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: true,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>
