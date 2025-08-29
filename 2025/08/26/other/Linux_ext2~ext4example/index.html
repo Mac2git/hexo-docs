@@ -1,0 +1,353 @@
+<!DOCTYPE html><html lang="zh-CN" data-theme="light"><head><meta charset="UTF-8"><meta http-equiv="X-UA-Compatible" content="IE=edge"><meta name="viewport" content="width=device-width, initial-scale=1.0,viewport-fit=cover"><title>linux ext2~ext4介绍 | Lazy的个人博客</title><meta name="author" content="Lazy"><meta name="copyright" content="Lazy"><meta name="format-detection" content="telephone=no"><meta name="theme-color" content="ffffff"><meta name="description" content="ext2~ext4介绍及ext4与ext3对比">
+<meta property="og:type" content="article">
+<meta property="og:title" content="linux ext2~ext4介绍">
+<meta property="og:url" content="https://mac2git.github.io/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/index.html">
+<meta property="og:site_name" content="Lazy的个人博客">
+<meta property="og:description" content="ext2~ext4介绍及ext4与ext3对比">
+<meta property="og:locale" content="zh_CN">
+<meta property="og:image" content="https://mac2git.github.io/hexo-docs/images/webImages/default_top_img.jpeg">
+<meta property="article:published_time" content="2025-08-26T09:17:00.000Z">
+<meta property="article:modified_time" content="2025-08-26T09:34:52.355Z">
+<meta property="article:author" content="Lazy">
+<meta property="article:tag" content="Linux">
+<meta property="article:tag" content="其他">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:image" content="https://mac2git.github.io/hexo-docs/images/webImages/default_top_img.jpeg"><script type="application/ld+json">{
+  "@context": "https://schema.org",
+  "@type": "BlogPosting",
+  "headline": "linux ext2~ext4介绍",
+  "url": "https://mac2git.github.io/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/",
+  "image": "https://mac2git.github.io/hexo-docs/images/webImages/default_top_img.jpeg",
+  "datePublished": "2025-08-26T09:17:00.000Z",
+  "dateModified": "2025-08-26T09:34:52.355Z",
+  "author": [
+    {
+      "@type": "Person",
+      "name": "Lazy",
+      "url": "https://mac2git.github.io/hexo-docs"
+    }
+  ]
+}</script><link rel="shortcut icon" href="/hexo-docs/images/webImages/logo.svg"><link rel="canonical" href="https://mac2git.github.io/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/index.html"><link rel="preconnect" href="//cdn.jsdelivr.net"/><link rel="preconnect" href="//busuanzi.ibruce.info"/><link rel="stylesheet" href="/hexo-docs/css/index.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.css" media="print" onload="this.media='all'"><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.min.css" media="print" onload="this.media='all'"><script>
+    (() => {
+      
+    const saveToLocal = {
+      set: (key, value, ttl) => {
+        if (!ttl) return
+        const expiry = Date.now() + ttl * 86400000
+        localStorage.setItem(key, JSON.stringify({ value, expiry }))
+      },
+      get: key => {
+        const itemStr = localStorage.getItem(key)
+        if (!itemStr) return undefined
+        const { value, expiry } = JSON.parse(itemStr)
+        if (Date.now() > expiry) {
+          localStorage.removeItem(key)
+          return undefined
+        }
+        return value
+      }
+    }
+
+    window.btf = {
+      saveToLocal,
+      getScript: (url, attr = {}) => new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = url
+        script.async = true
+        Object.entries(attr).forEach(([key, val]) => script.setAttribute(key, val))
+        script.onload = script.onreadystatechange = () => {
+          if (!script.readyState || /loaded|complete/.test(script.readyState)) resolve()
+        }
+        script.onerror = reject
+        document.head.appendChild(script)
+      }),
+      getCSS: (url, id) => new Promise((resolve, reject) => {
+        const link = document.createElement('link')
+        link.rel = 'stylesheet'
+        link.href = url
+        if (id) link.id = id
+        link.onload = link.onreadystatechange = () => {
+          if (!link.readyState || /loaded|complete/.test(link.readyState)) resolve()
+        }
+        link.onerror = reject
+        document.head.appendChild(link)
+      }),
+      addGlobalFn: (key, fn, name = false, parent = window) => {
+        if (!false && key.startsWith('pjax')) return
+        const globalFn = parent.globalFn || {}
+        globalFn[key] = globalFn[key] || {}
+        globalFn[key][name || Object.keys(globalFn[key]).length] = fn
+        parent.globalFn = globalFn
+      }
+    }
+  
+      
+      const activateDarkMode = () => {
+        document.documentElement.setAttribute('data-theme', 'dark')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', '#0d0d0d')
+        }
+      }
+      const activateLightMode = () => {
+        document.documentElement.setAttribute('data-theme', 'light')
+        if (document.querySelector('meta[name="theme-color"]') !== null) {
+          document.querySelector('meta[name="theme-color"]').setAttribute('content', 'ffffff')
+        }
+      }
+
+      btf.activateDarkMode = activateDarkMode
+      btf.activateLightMode = activateLightMode
+
+      const theme = saveToLocal.get('theme')
+    
+          theme === 'dark' ? activateDarkMode() : theme === 'light' ? activateLightMode() : null
+        
+      
+      const asideStatus = saveToLocal.get('aside-status')
+      if (asideStatus !== undefined) {
+        document.documentElement.classList.toggle('hide-aside', asideStatus === 'hide')
+      }
+    
+      
+    const detectApple = () => {
+      if (/iPad|iPhone|iPod|Macintosh/.test(navigator.userAgent)) {
+        document.documentElement.classList.add('apple')
+      }
+    }
+    detectApple()
+  
+    })()
+  </script><script>const GLOBAL_CONFIG = {
+  root: '/hexo-docs/',
+  algolia: undefined,
+  localSearch: {"path":"/hexo-docs/search.xml","preload":true,"top_n_per_article":-1,"unescape":true,"languages":{"hits_empty":"未找到符合您查询的内容：${query}","hits_stats":"共找到 ${hits} 篇文章"}},
+  translate: undefined,
+  highlight: {"plugin":"highlight.js","highlightCopy":true,"highlightLang":true,"highlightHeightLimit":false,"highlightFullpage":false,"highlightMacStyle":false},
+  copy: {
+    success: '复制成功',
+    error: '复制失败',
+    noSupport: '浏览器不支持'
+  },
+  relativeDate: {
+    homepage: false,
+    post: false
+  },
+  runtime: '',
+  dateSuffix: {
+    just: '刚刚',
+    min: '分钟前',
+    hour: '小时前',
+    day: '天前',
+    month: '个月前'
+  },
+  copyright: {"limitCount":30,"languages":{"author":"作者: Lazy","link":"链接: ","source":"来源: Lazy的个人博客","info":"著作权归作者所有。商业转载请联系作者获得授权，非商业转载请注明出处。"}},
+  lightbox: 'fancybox',
+  Snackbar: {"chs_to_cht":"已切换为繁体中文","cht_to_chs":"已切换为简体中文","day_to_night":"已切换为深色模式","night_to_day":"已切换为浅色模式","bgLight":"#49b1f5","bgDark":"#2d3035","position":"bottom-left"},
+  infinitegrid: {
+    js: 'https://cdn.jsdelivr.net/npm/@egjs/infinitegrid/dist/infinitegrid.min.js',
+    buttonText: '加载更多'
+  },
+  isPhotoFigcaption: true,
+  islazyloadPlugin: false,
+  isAnchor: false,
+  percent: {
+    toc: true,
+    rightside: true,
+  },
+  autoDarkmode: false
+}</script><script id="config-diff">var GLOBAL_CONFIG_SITE = {
+  title: 'linux ext2~ext4介绍',
+  isHighlightShrink: false,
+  isToc: true,
+  pageType: 'post'
+}</script><meta name="generator" content="Hexo 7.3.0"></head><body><div id="sidebar"><div id="menu-mask"></div><div id="sidebar-menus"><div class="avatar-img text-center"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="site-data text-center"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">25</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">13</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">9</div></a></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div></div></div><div class="post" id="body-wrap"><header class="post-bg" id="page-header" style="background-image: url(/hexo-docs/images/webImages/default_top_img.jpeg);"><nav id="nav"><span id="blog-info"><a class="nav-site-title" href="/hexo-docs/"><span class="site-name">Lazy的个人博客</span></a><a class="nav-page-title" href="/hexo-docs/"><span class="site-name">linux ext2~ext4介绍</span><span class="site-name"><i class="fa-solid fa-circle-arrow-left"></i><span>  返回首页</span></span></a></span><div id="menus"><div id="search-button"><span class="site-page social-icon search"><i class="fas fa-search fa-fw"></i><span> 搜索</span></span></div><div class="menus_items"><div class="menus_item"><a class="site-page" href="/hexo-docs/"><i class="fa-fw fas fa-home"></i><span> 主页</span></a></div><div class="menus_item"><span class="site-page group"><i class="fa-fw fa fa-graduation-cap"></i><span> 博文</span><i class="fas fa-chevron-down"></i></span><ul class="menus_item_child"><li><a class="site-page child" href="/hexo-docs/categories/"><i class="fa-fw fa fa-archive"></i><span> 分类</span></a></li><li><a class="site-page child" href="/hexo-docs/tags/"><i class="fa-fw fa fa-tags"></i><span> 标签</span></a></li></ul></div><div class="menus_item"><a class="site-page" href="/hexo-docs/comment/"><i class="fa-fw fa fa-paper-plane"></i><span> 留言板</span></a></div><div class="menus_item"><a class="site-page" href="/hexo-docs/about"><i class="fa-fw fas fa-heart"></i><span> 关于笔者</span></a></div></div><div id="toggle-menu"><span class="site-page"><i class="fas fa-bars fa-fw"></i></span></div></div></nav><div id="post-info"><h1 class="post-title">linux ext2~ext4介绍</h1><div id="post-meta"><div class="meta-firstline"><span class="post-meta-date"><i class="far fa-calendar-alt fa-fw post-meta-icon"></i><span class="post-meta-label">发表于</span><time class="post-meta-date-created" datetime="2025-08-26T09:17:00.000Z" title="发表于 2025-08-26 17:17:00">2025-08-26</time><span class="post-meta-separator">|</span><i class="fas fa-history fa-fw post-meta-icon"></i><span class="post-meta-label">更新于</span><time class="post-meta-date-updated" datetime="2025-08-26T09:34:52.355Z" title="更新于 2025-08-26 17:34:52">2025-08-26</time></span><span class="post-meta-categories"><span class="post-meta-separator">|</span><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%85%B6%E4%BB%96/">其他</a><i class="fas fa-angle-right post-meta-separator"></i><i class="fas fa-inbox fa-fw post-meta-icon"></i><a class="post-meta-categories" href="/hexo-docs/categories/%E5%85%B6%E4%BB%96/Linux/">Linux</a></span></div><div class="meta-secondline"><span class="post-meta-separator">|</span><span class="post-meta-wordcount"><i class="far fa-file-word fa-fw post-meta-icon"></i><span class="post-meta-label">总字数:</span><span class="word-count">1.8k</span><span class="post-meta-separator">|</span><i class="far fa-clock fa-fw post-meta-icon"></i><span class="post-meta-label">阅读时长:</span><span>5分钟</span></span><span class="post-meta-separator">|</span><span class="post-meta-pv-cv" id="" data-flag-title=""><i class="far fa-eye fa-fw post-meta-icon"></i><span class="post-meta-label">浏览量:</span><span id="busuanzi_value_page_pv"><i class="fa-solid fa-spinner fa-spin"></i></span></span></div></div></div></header><main class="layout" id="content-inner"><div id="post"><article class="container post-content" id="article-container"><figure class="highlight plaintext"><table><tr><td class="code"><pre><span class="line">flowchart TD</span><br><span class="line">    A[ext2] --&gt;|“增加日志功能”&lt;br&gt;核心变革：告别易损| B[ext3]</span><br><span class="line">    B --&gt;|“扩展与优化”&lt;br&gt;目标：更大、更快、更强| C[ext4]</span><br><span class="line">    </span><br><span class="line">    subgraph C [ext4 主要特性]</span><br><span class="line">        C1[扩展性&lt;br&gt;最大 1EB 文件/16TB 文件系统]</span><br><span class="line">        C2[性能优化&lt;br&gt;Extents/多块分配]</span><br><span class="line">        C3[高级功能&lt;br&gt;持久预分配/延迟分配等]</span><br><span class="line">    end</span><br><span class="line"></span><br><span class="line">    B -.-&gt; D[向下一代过渡&lt;br&gt;Btrfs/ZFS]</span><br></pre></td></tr></table></figure>
+
+<h3 id="第一部分：ext2-ext3-ext4-的演进史"><a href="#第一部分：ext2-ext3-ext4-的演进史" class="headerlink" title="第一部分：ext2, ext3, ext4 的演进史"></a>第一部分：ext2, ext3, ext4 的演进史</h3><h4 id="1-ext2-Second-Extended-File-System"><a href="#1-ext2-Second-Extended-File-System" class="headerlink" title="1. ext2 (Second Extended File System)"></a>1. ext2 (Second Extended File System)</h4><ul>
+<li><strong>时代</strong>： 1993年推出，是Linux早期最重要、最稳定的文件系统。</li>
+<li><strong>设计</strong>： 一种“非日志式”文件系统。</li>
+<li><strong>工作原理</strong>：<ul>
+<li>它的元数据（如inode表、超级块）是直接写入磁盘的，没有记录“意图”的日志。</li>
+<li>当需要修改文件（如写入数据）时，它直接更新磁盘上的元数据。</li>
+</ul>
+</li>
+<li><strong>缺点</strong>：<ul>
+<li><strong>致命伤：文件系统一致性</strong>。如果在写入操作过程中突然断电或系统崩溃，文件系统会处于一个“中间状态”，下次启动时必须运行 <code>fsck</code>（文件系统检查）工具进行长时间的一致性检查和数据修复，这个过程对于大容量磁盘来说非常耗时，且有可能导致数据丢失。</li>
+</ul>
+</li>
+<li><strong>现状</strong>： 现在主要用于一些特殊场景，如嵌入式系统或<code>/boot</code>分区（因为引导程序简单，不需要日志功能），但主流发行版的根分区已不再使用它。</li>
+</ul>
+<h4 id="2-ext3-Third-Extended-File-System"><a href="#2-ext3-Third-Extended-File-System" class="headerlink" title="2. ext3 (Third Extended File System)"></a>2. ext3 (Third Extended File System)</h4><ul>
+<li><strong>时代</strong>： 2001年推出，是 ext2 的直接升级版。</li>
+<li><strong>核心改进</strong>： <strong>引入了“日志”功能</strong>，解决了 ext2 的最大痛点。</li>
+<li><strong>工作原理</strong>：<ul>
+<li>在真正修改磁盘元数据之前，它会先将“准备要做什么”这个<strong>事务</strong>记录到磁盘上一块单独的“日志区”。</li>
+<li>只有当日志记录成功写入后，才会开始真正的元数据操作。</li>
+<li>操作完成后，再在日志中标记该事务完成。</li>
+</ul>
+</li>
+<li><strong>优势</strong>：<ul>
+<li><strong>快速恢复</strong>： 系统崩溃后重启，ext3 只需要读取日志，检查哪些操作已经完成（commit），哪些操作还未完成，然后<strong>非常快速</strong>地回滚或完成这些操作即可。这使得文件系统能迅速恢复到一致状态，避免了长时间的 <code>fsck</code> 检查。</li>
+<li><strong>高兼容性</strong>： ext3 完全向后兼容 ext2。你可以直接 <code>mount -t ext3 /dev/sda1 /mnt</code> 一个 ext2 分区，反之亦然。升级也非常平滑。</li>
+<li><strong>三种日志模式</strong>：<ul>
+<li><code>journal</code>： 最安全。将元数据和文件数据都先写入日志。性能开销最大。</li>
+<li><code>ordered</code>（默认）： 只记录元数据日志，但保证先写文件数据，再提交元数据日志。安全性和性能的折中方案。</li>
+<li><code>writeback</code>： 只记录元数据日志，不保证数据写入顺序。性能最好，但安全性最低。</li>
+</ul>
+</li>
+</ul>
+</li>
+<li><strong>遗留问题</strong>： ext3 虽然解决了日志问题，但在处理大文件和大量小文件时，性能依然受限于其古老的底层结构（如块映射方式）。</li>
+</ul>
+<h4 id="3-ext4-Fourth-Extended-File-System"><a href="#3-ext4-Fourth-Extended-File-System" class="headerlink" title="3. ext4 (Fourth Extended File System)"></a>3. ext4 (Fourth Extended File System)</h4><ul>
+<li><strong>时代</strong>： 2008年推出，作为 ext3 的进一步扩展，旨在突破性能和容量限制。</li>
+<li><strong>目标</strong>： <strong>扩展性、可靠性、性能</strong>。</li>
+<li><strong>主要改进</strong>（也是与 ext3 的主要区别）：<ol>
+<li><strong>更大的文件系统支持</strong>： 支持最大 <strong>1EB</strong> (exabyte, 1EB &#x3D; 1024PB) 的单个文件，以及最大 <strong>16TB</strong> 的文件系统（由于某些工具限制，实践中可能略小）。</li>
+<li><strong>Extents</strong>：<ul>
+<li><strong>ext3</strong>： 使用<strong>间接块映射</strong>。一个文件的数据块地址存储在inode里。对于大文件，需要一级、二级甚至三级间接块来存储地址指针，就像一本电话簿，要找一个号码可能需要翻好几级目录，效率低下。</li>
+<li><strong>ext4</strong>： 使用<strong>Extents</strong>。一个Extent是一串<strong>连续的物理块</strong>的引用（例如“文件数据从块1000开始，连续200个块”）。这大大减少了大文件所需的元数据量，提升了访问大文件的性能，也减少了文件碎片。这是最核心的改进之一。</li>
+</ul>
+</li>
+<li><strong>多块分配</strong>：<ul>
+<li><strong>ext3</strong>： 使用<strong>单块分配器</strong>。每次分配一个数据块，容易导致文件碎片化。</li>
+<li><strong>ext4</strong>： 使用<strong>多块分配器</strong>（<em>mballoc</em>）。可以一次分配多个连续的块，与Extents特性配合，能更好地分配连续空间，显著减少碎片。</li>
+</ul>
+</li>
+<li><strong>持久预分配</strong>：<ul>
+<li>允许应用程序预先分配所需的磁盘空间（如<code>fallocate()</code>），并保证其可用。这对于数据库、视频流媒体等需要保证有连续空间的应用非常有用，速度远快于手动写零填充文件。</li>
+</ul>
+</li>
+<li><strong>延迟分配</strong>：<ul>
+<li>在数据写入磁盘前，先在内存中缓存一段时间，让分配器有机会优化块的选择，从而更好地组织物理布局，减少碎片。但这也增加了一点数据在写入缓存后丢失的风险（虽然风险极小）。</li>
+</ul>
+</li>
+<li><strong>无限子目录</strong>：<ul>
+<li>ext3 限制子目录数量为32000个。</li>
+<li>ext4 使用<code>htree</code>索引，解除了这个限制。</li>
+</ul>
+</li>
+<li><strong>日志校验</strong>：<ul>
+<li>给日志数据添加校验和，有助于检测日志数据是否损坏，提升了可靠性。</li>
+</ul>
+</li>
+<li><strong>更快的文件系统检查</strong>：<ul>
+<li>由于设计了“未初始化组”等新特性，<code>e2fsck</code> 的速度比 ext3 快得多。</li>
+</ul>
+</li>
+</ol>
+</li>
+</ul>
+<hr>
+<h3 id="第二部分：ext4-与-ext3-的核心区别总结"><a href="#第二部分：ext4-与-ext3-的核心区别总结" class="headerlink" title="第二部分：ext4 与 ext3 的核心区别总结"></a>第二部分：ext4 与 ext3 的核心区别总结</h3><table>
+<thead>
+<tr>
+<th align="left">特性</th>
+<th align="left">ext3</th>
+<th align="left">ext4</th>
+<th align="left">优势</th>
+</tr>
+</thead>
+<tbody><tr>
+<td align="left"><strong>最大文件系统</strong></td>
+<td align="left">16TB ~ 32TB</td>
+<td align="left"><strong>1EB</strong> (1,048,576 TB)</td>
+<td align="left">支持未来超大存储</td>
+</tr>
+<tr>
+<td align="left"><strong>最大文件</strong></td>
+<td align="left">2TB</td>
+<td align="left"><strong>16TB</strong> (理论上1EB，受OS限制)</td>
+<td align="left">支持超大文件</td>
+</tr>
+<tr>
+<td align="left"><strong>块映射方式</strong></td>
+<td align="left">间接块映射 (旧)</td>
+<td align="left"><strong>Extents</strong> (新)</td>
+<td align="left"><strong>大幅提升大文件性能，减少碎片</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>块分配策略</strong></td>
+<td align="left">单块分配</td>
+<td align="left"><strong>多块分配 (mballoc)</strong></td>
+<td align="left">更好地分配连续块，<strong>减少碎片</strong></td>
+</tr>
+<tr>
+<td align="left"><strong>预分配</strong></td>
+<td align="left">写零填充，速度慢</td>
+<td align="left"><strong><code>fallocate()</code>，瞬间完成</strong></td>
+<td align="left">为应用程序提供快速空间预留</td>
+</tr>
+<tr>
+<td align="left"><strong>子目录限制</strong></td>
+<td align="left">32000个</td>
+<td align="left"><strong>无限</strong> (受FS大小限制)</td>
+<td align="left">适合需要大量目录的场景</td>
+</tr>
+<tr>
+<td align="left"><strong>日志校验</strong></td>
+<td align="left">无</td>
+<td align="left"><strong>有</strong></td>
+<td align="left">提高日志可靠性</td>
+</tr>
+<tr>
+<td align="left"><strong><code>fsck</code> 速度</strong></td>
+<td align="left">慢</td>
+<td align="left"><strong>快</strong></td>
+<td align="left">系统检查恢复更快</td>
+</tr>
+</tbody></table>
+<hr>
+<h3 id="结论与建议"><a href="#结论与建议" class="headerlink" title="结论与建议"></a>结论与建议</h3><ul>
+<li><strong>ext2</strong> 是过时且不安全的，除非有特殊需求，否则不应使用。</li>
+<li><strong>ext3</strong> 是 ext2 的可靠升级，提供了必要的日志功能，在旧硬件或追求极致稳定性的特定环境中仍有用武之地。</li>
+<li><strong>ext4</strong> 是 ext3 的现代化演进，它在<strong>性能、容量、扩展性和可靠性</strong>方面都实现了全面超越。它是当今绝大多数Linux发行版的<strong>默认文件系统</strong>，是你应该选择的版本。</li>
+</ul>
+<p>简单来说，从 ext3 到 ext4 的升级，不仅仅是版本的改变，更是一次从设计理念到实际效能的全面进化，正如图表所示，它致力于解决扩展性和性能瓶颈，为现代计算需求做好了准备。虽然更新的文件系统（如 Btrfs、ZFS、XFS）在某些场景下有优势，但 ext4 在通用性、稳定性和兼容性方面依然是无与伦比的平衡之选。</p>
+</article><div class="post-copyright"><div class="post-copyright__author"><span class="post-copyright-meta"><i class="fas fa-circle-user fa-fw"></i>文章作者: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs">Lazy</a></span></div><div class="post-copyright__type"><span class="post-copyright-meta"><i class="fas fa-square-arrow-up-right fa-fw"></i>文章链接: </span><span class="post-copyright-info"><a href="https://mac2git.github.io/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/">https://mac2git.github.io/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/</a></span></div><div class="post-copyright__notice"><span class="post-copyright-meta"><i class="fas fa-circle-exclamation fa-fw"></i>版权声明: </span><span class="post-copyright-info">本博客所有文章除特别声明外，均采用 <a href="https://creativecommons.org/licenses/by-nc-sa/4.0/" target="_blank">CC BY-NC-SA 4.0</a> 许可协议。转载请注明来源 <a href="https://mac2git.github.io/hexo-docs" target="_blank">Lazy的个人博客</a>！</span></div></div><div class="tag_share"><div class="post-meta__tag-list"><a class="post-meta__tags" href="/hexo-docs/tags/Linux/">Linux</a><a class="post-meta__tags" href="/hexo-docs/tags/%E5%85%B6%E4%BB%96/">其他</a></div><div class="post-share"><div class="social-share" data-image="/hexo-docs/images/webImages/default_top_img.jpeg" data-sites="facebook,twitter,wechat,weibo,qq"></div><link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/css/share.min.css" media="print" onload="this.media='all'"><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/sharejs/dist/js/social-share.min.js" defer></script></div></div><nav class="pagination-post" id="pagination"><a class="pagination-related" href="/hexo-docs/2025/08/26/other/mysql_id/" title="在实际开发过程中Mysql该选用ID什么ID作为主键？"><img class="cover" src="/hexo-docs/images/mysql_idImages/cover.svg" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of previous post"><div class="info"><div class="info-1"><div class="info-item-1">上一篇</div><div class="info-item-2">在实际开发过程中Mysql该选用ID什么ID作为主键？</div></div><div class="info-2"><div class="info-item-1">自增ID、UUID、雪花算法的介绍及优缺点</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img class="cover" src="/hexo-docs/images/hashImages/cover.png" onerror="onerror=null;src='/hexo-docs/img/404.jpg'" alt="cover of next post"><div class="info text-right"><div class="info-1"><div class="info-item-1">下一篇</div><div class="info-item-2">Hash值</div></div><div class="info-2"><div class="info-item-1">什么是Hash值？原理、计算与作用全解析</div></div></div></a></nav><div class="relatedPosts"><div class="headline"><i class="fas fa-thumbs-up fa-fw"></i><span>相关推荐</span></div><div class="relatedPosts-list"><a class="pagination-related" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img class="cover" src="/hexo-docs/images/ackImages/cover.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-24</div><div class="info-item-2">ACK机制</div></div><div class="info-2"><div class="info-item-1">什么是ACK机制、ACK机制的工作流程、ACK机制的应用场景</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img class="cover" src="/hexo-docs/images/hashImages/cover.png" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-24</div><div class="info-item-2">Hash值</div></div><div class="info-2"><div class="info-item-1">什么是Hash值？原理、计算与作用全解析</div></div></div></a><a class="pagination-related" href="/hexo-docs/2025/08/26/other/mysql_id/" title="在实际开发过程中Mysql该选用ID什么ID作为主键？"><img class="cover" src="/hexo-docs/images/mysql_idImages/cover.svg" alt="cover"><div class="info text-center"><div class="info-1"><div class="info-item-1"><i class="far fa-calendar-alt fa-fw"></i> 2025-08-26</div><div class="info-item-2">在实际开发过程中Mysql该选用ID什么ID作为主键？</div></div><div class="info-2"><div class="info-item-1">自增ID、UUID、雪花算法的介绍及优缺点</div></div></div></a></div></div></div><div class="aside-content" id="aside-content"><div class="card-widget card-info text-center"><div class="avatar-img"><img src="/hexo-docs/images/webImages/avatar.jpg" onerror="this.onerror=null;this.src='/hexo-docs/img/friend_404.gif'" alt="avatar"/></div><div class="author-info-name">Lazy</div><div class="author-info-description">归途也还可爱</div><div class="site-data"><a href="/hexo-docs/archives/"><div class="headline">文章</div><div class="length-num">25</div></a><a href="/hexo-docs/tags/"><div class="headline">标签</div><div class="length-num">13</div></a><a href="/hexo-docs/categories/"><div class="headline">分类</div><div class="length-num">9</div></a></div><a id="card-info-btn" target="_blank" rel="noopener" href="https://github.com/Mac2git"><i class="fab fa-github"></i><span>Follow Me</span></a><div class="card-info-social-icons"><a class="social-icon" href="https://github.com/Mac2git" target="_blank" title="Github"><i class="fab fa-github"></i></a><a class="social-icon" href="https://gitee.com/wx_00ba6ce280" target="_blank" title="Gitee"><i class="fa fa-book-open"></i></a></div></div><div class="card-widget card-announcement"><div class="item-headline"><i class="fas fa-bullhorn fa-shake"></i><span>公告</span></div><div class="announcement_content">博客正在施工，请先随便逛逛。</div></div><div class="sticky_layout"><div class="card-widget" id="card-toc"><div class="item-headline"><i class="fas fa-stream"></i><span>目录</span><span class="toc-percentage"></span></div><div class="toc-content"><ol class="toc"><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%B8%80%E9%83%A8%E5%88%86%EF%BC%9Aext2-ext3-ext4-%E7%9A%84%E6%BC%94%E8%BF%9B%E5%8F%B2"><span class="toc-number">1.</span> <span class="toc-text">第一部分：ext2, ext3, ext4 的演进史</span></a><ol class="toc-child"><li class="toc-item toc-level-4"><a class="toc-link" href="#1-ext2-Second-Extended-File-System"><span class="toc-number">1.1.</span> <span class="toc-text">1. ext2 (Second Extended File System)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#2-ext3-Third-Extended-File-System"><span class="toc-number">1.2.</span> <span class="toc-text">2. ext3 (Third Extended File System)</span></a></li><li class="toc-item toc-level-4"><a class="toc-link" href="#3-ext4-Fourth-Extended-File-System"><span class="toc-number">1.3.</span> <span class="toc-text">3. ext4 (Fourth Extended File System)</span></a></li></ol></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%AC%AC%E4%BA%8C%E9%83%A8%E5%88%86%EF%BC%9Aext4-%E4%B8%8E-ext3-%E7%9A%84%E6%A0%B8%E5%BF%83%E5%8C%BA%E5%88%AB%E6%80%BB%E7%BB%93"><span class="toc-number">2.</span> <span class="toc-text">第二部分：ext4 与 ext3 的核心区别总结</span></a></li><li class="toc-item toc-level-3"><a class="toc-link" href="#%E7%BB%93%E8%AE%BA%E4%B8%8E%E5%BB%BA%E8%AE%AE"><span class="toc-number">3.</span> <span class="toc-text">结论与建议</span></a></li></ol></div></div><div class="card-widget card-recent-post"><div class="item-headline"><i class="fas fa-history"></i><span>最新文章</span></div><div class="aside-list"><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/29/commit_protocol/index/" title="两阶段提交与三阶段提交"><img src="/hexo-docs/images/commit_protocolImages/img.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="两阶段提交与三阶段提交"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/29/commit_protocol/index/" title="两阶段提交与三阶段提交">两阶段提交与三阶段提交</a><time datetime="2025-08-28T16:00:00.000Z" title="发表于 2025-08-29 00:00:00">2025-08-29</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/26/other/mysql_id/" title="在实际开发过程中Mysql该选用ID什么ID作为主键？"><img src="/hexo-docs/images/mysql_idImages/cover.svg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="在实际开发过程中Mysql该选用ID什么ID作为主键？"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/26/other/mysql_id/" title="在实际开发过程中Mysql该选用ID什么ID作为主键？">在实际开发过程中Mysql该选用ID什么ID作为主键？</a><time datetime="2025-08-26T09:24:30.000Z" title="发表于 2025-08-26 17:24:30">2025-08-26</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/" title="linux ext2~ext4介绍"><img src="/hexo-docs/images/webImages/default_top_img.jpeg" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="linux ext2~ext4介绍"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/26/other/Linux_ext2~ext4example/" title="linux ext2~ext4介绍">linux ext2~ext4介绍</a><time datetime="2025-08-26T09:17:00.000Z" title="发表于 2025-08-26 17:17:00">2025-08-26</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值"><img src="/hexo-docs/images/hashImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="Hash值"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/hash/" title="Hash值">Hash值</a><time datetime="2025-08-24T11:30:12.000Z" title="发表于 2025-08-24 19:30:12">2025-08-24</time></div></div><div class="aside-list-item"><a class="thumbnail" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制"><img src="/hexo-docs/images/ackImages/cover.png" onerror="this.onerror=null;this.src='/hexo-docs/img/404.jpg'" alt="ACK机制"/></a><div class="content"><a class="title" href="/hexo-docs/2025/08/24/other/ack/" title="ACK机制">ACK机制</a><time datetime="2025-08-24T10:19:12.000Z" title="发表于 2025-08-24 18:19:12">2025-08-24</time></div></div></div></div></div></div></main><footer id="footer"><div class="footer-other"><div class="footer-copyright"><span class="copyright">&copy;&nbsp;2025 By Lazy</span><span class="framework-info"><span>框架 </span><a target="_blank" rel="noopener" href="https://hexo.io">Hexo 7.3.0</a><span class="footer-separator">|</span><span>主题 </span><a target="_blank" rel="noopener" href="https://github.com/jerryc127/hexo-theme-butterfly">Butterfly 5.4.3</a></span></div></div></footer></div><div id="rightside"><div id="rightside-config-hide"><button id="readmode" type="button" title="阅读模式"><i class="fas fa-book-open"></i></button><button id="darkmode" type="button" title="日间和夜间模式切换"><i class="fas fa-adjust"></i></button><button id="hide-aside-btn" type="button" title="单栏和双栏切换"><i class="fas fa-arrows-alt-h"></i></button></div><div id="rightside-config-show"><button id="rightside-config" type="button" title="设置"><i class="fas fa-cog fa-spin"></i></button><button class="close" id="mobile-toc-button" type="button" title="目录"><i class="fas fa-list-ul"></i></button><button id="go-up" type="button" title="回到顶部"><span class="scroll-percent"></span><i class="fas fa-arrow-up"></i></button></div></div><div><script src="/hexo-docs/js/utils.js"></script><script src="/hexo-docs/js/main.js"></script><script src="https://cdn.jsdelivr.net/npm/@fancyapps/ui/dist/fancybox/fancybox.umd.min.js"></script><script src="https://cdn.jsdelivr.net/npm/instant.page/instantpage.min.js" type="module"></script><script src="https://cdn.jsdelivr.net/npm/node-snackbar/dist/snackbar.min.js"></script><div class="js-pjax"><script>(() => {
+  const loadMathjax = () => {
+    if (!window.MathJax) {
+      window.MathJax = {
+        tex: {
+          inlineMath: [['$', '$'], ['\\(', '\\)']],
+          tags: 'none',
+        },
+        chtml: {
+          scale: 1.1
+        },
+        options: {
+          enableMenu: true,
+          renderActions: {
+            findScript: [10, doc => {
+              for (const node of document.querySelectorAll('script[type^="math/tex"]')) {
+                const display = !!node.type.match(/; *mode=display/)
+                const math = new doc.options.MathItem(node.textContent, doc.inputJax[0], display)
+                const text = document.createTextNode('')
+                node.parentNode.replaceChild(text, node)
+                math.start = {node: text, delim: '', n: 0}
+                math.end = {node: text, delim: '', n: 0}
+                doc.math.push(math)
+              }
+            }, '']
+          }
+        }
+      }
+
+      const script = document.createElement('script')
+      script.src = 'https://cdn.jsdelivr.net/npm/mathjax/es5/tex-mml-chtml.min.js'
+      script.id = 'MathJax-script'
+      script.async = true
+      document.head.appendChild(script)
+    } else {
+      MathJax.startup.document.state(0)
+      MathJax.texReset()
+      MathJax.typesetPromise()
+    }
+  }
+
+  btf.addGlobalFn('encrypt', loadMathjax, 'mathjax')
+  window.pjax ? loadMathjax() : window.addEventListener('load', loadMathjax)
+})()</script></div><script defer="defer" id="fluttering_ribbon" mobile="false" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/canvas-fluttering-ribbon.min.js"></script><script src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/activate-power-mode.min.js"></script><script>POWERMODE.colorful = true;
+POWERMODE.shake = false;
+POWERMODE.mobile = true;
+document.body.addEventListener('input', POWERMODE);
+</script><script id="click-show-text" src="https://cdn.jsdelivr.net/npm/butterfly-extsrc/dist/click-show-text.min.js" data-mobile="true" data-text="富强,民主,文明,和谐,平等,公正,法治,爱国,敬业,诚信,友善" data-fontsize="14px" data-random="true" async="async"></script><script async data-pjax src="//busuanzi.ibruce.info/busuanzi/2.3/busuanzi.pure.mini.js"></script><div id="local-search"><div class="search-dialog"><nav class="search-nav"><span class="search-dialog-title">搜索</span><span id="loading-status"></span><button class="search-close-button"><i class="fas fa-times"></i></button></nav><div class="text-center" id="loading-database"><i class="fas fa-spinner fa-pulse"></i><span>  数据加载中</span></div><div class="search-wrap"><div id="local-search-input"><div class="local-search-box"><input class="local-search-box--input" placeholder="搜索文章" type="text"/></div></div><hr/><div id="local-search-results"></div><div id="local-search-stats-wrap"></div></div></div><div id="search-mask"></div><script src="/hexo-docs/js/search/local-search.js"></script></div></div></body></html>
